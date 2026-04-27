@@ -1,10 +1,15 @@
 package com.engkanto.client;
 
+import javax.swing.SwingUtilities;
+
 public final class ClientMain {
     private ClientMain() {
     }
 
     public static void main(String[] args) {
-        System.out.println("Engkanto Clash client starting...");
+        SwingUtilities.invokeLater(() -> {
+            GameWindow window = new GameWindow();
+            window.show();
+        });
     }
 }
