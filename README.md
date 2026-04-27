@@ -6,10 +6,10 @@ four players, sprite-based rendering, and in-game chat.
 
 ## Technology Stack
 
-### Java 21
+### Java 17
 
-The project uses Java 21 as the main programming language and runtime. Java 21
-is a modern long-term support version suitable for desktop applications,
+The project uses Java 17 as the main programming language and runtime. Java 17
+is a stable long-term support version suitable for desktop applications,
 networking, and game loop development.
 
 ### Gradle
@@ -48,25 +48,26 @@ logic, and message handling.
 Build the project:
 
 ```bash
-./gradlew build
+gradle build
 ```
 
 Run the server:
 
 ```bash
-./gradlew runServer
+gradle runServer
 ```
 
 Run a client:
 
 ```bash
-./gradlew runClient
+gradle runClient
 ```
 
 Run tests:
 
 ```bash
-./gradlew test
+gradle test
 ```
 
-On Windows PowerShell, use `.\gradlew.bat` instead of `./gradlew`.
+After a Gradle wrapper is generated, the same commands can be run with
+`./gradlew` on Linux/macOS or `.\gradlew.bat` on Windows PowerShell.

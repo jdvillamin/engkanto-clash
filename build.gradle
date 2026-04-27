@@ -1,0 +1,43 @@
+plugins {
+    id "java"
+    id "application"
+}
+
+group = "com.engkanto"
+version = "0.1.0"
+
+sourceCompatibility = "17"
+targetCompatibility = "17"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "com.google.code.gson:gson:2.11.0"
+
+    testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.3"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.10.3"
+}
+
+mainClassName = "com.engkanto.client.ClientMain"
+
+task runServer(type: JavaExec) {
+    group = "application"
+    description = "Runs the Engkanto Clash server"
+    classpath = sourceSets.main.runtimeClasspath
+    main = "com.engkanto.server.ServerMain"
+}
+
+task runClient(type: JavaExec) {
+    group = "application"
+    description = "Runs the Engkanto Clash client"
+    classpath = sourceSets.main.runtimeClasspath
+    main = "com.engkanto.client.ClientMain"
+}
+
+if (org.gradle.util.GradleVersion.current() >= org.gradle.util.GradleVersion.version("4.6")) {
+    test {
+        useJUnitPlatform()
+    }
+}
