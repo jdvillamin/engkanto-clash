@@ -12,7 +12,7 @@ public final class DebugRenderer {
     public void drawHud(Graphics2D graphics) {
         graphics.setFont(HUD_FONT);
         graphics.setColor(new Color(242, 232, 194));
-        graphics.drawString("Engkanto Clash", 16, 24);
-        graphics.drawString("Move: WASD / Arrow Keys", 16, GameConfig.SCREEN_HEIGHT - 16);
+        graphics.drawString("Character Sprite Test", 16, 24);
+        graphics.drawString("P switch | A/D walk | W jump | S idle | J/K/E moves | L ult | Z death", 16, GameConfig.SCREEN_HEIGHT - 16);
     }
 }
