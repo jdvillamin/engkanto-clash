@@ -13,6 +13,7 @@ public final class KeyboardInput extends KeyAdapter {
     private boolean move3Pressed;
     private boolean specialPressed;
     private boolean deathPressed;
+    private boolean glidePressed;
     private boolean switchCharacterPressed;
     private boolean move1Requested;
     private boolean move2Requested;
@@ -61,6 +62,10 @@ public final class KeyboardInput extends KeyAdapter {
 
     public boolean isSpecialPressed() {
         return specialPressed;
+    }
+
+    public boolean isGlidePressed() {
+        return glidePressed;
     }
 
     public boolean consumeMove1Requested() {
@@ -146,6 +151,9 @@ public final class KeyboardInput extends KeyAdapter {
                     deathRequested = true;
                 }
                 deathPressed = pressed;
+                break;
+            case KeyEvent.VK_SPACE:
+                glidePressed = pressed;
                 break;
             case KeyEvent.VK_P:
                 if (pressed && !switchCharacterPressed) {

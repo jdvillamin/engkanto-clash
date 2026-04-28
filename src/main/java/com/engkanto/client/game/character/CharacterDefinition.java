@@ -24,6 +24,18 @@ public interface CharacterDefinition {
         return 0.0;
     }
 
+    default double getGravityScale(Player player, boolean glideHeld) {
+        return 1.0;
+    }
+
+    default double getMaximumFallVelocity(Player player, boolean glideHeld) {
+        return Double.POSITIVE_INFINITY;
+    }
+
+    default int getFallingJumpFrame(Player player, boolean glideHeld) {
+        return 2;
+    }
+
     default void onMove1(Player player) {
         cancelMovementEffect();
     }

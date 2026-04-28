@@ -1,7 +1,9 @@
 package com.engkanto.client.game.entity;
 
 import com.engkanto.client.game.GameConfig;
+import com.engkanto.client.game.character.AswangCharacter;
 import com.engkanto.client.game.character.CharacterDefinition;
+import com.engkanto.client.game.character.EngkantoCharacter;
 import com.engkanto.client.game.character.KapreCharacter;
 import com.engkanto.client.game.character.PlayerAction;
 import com.engkanto.client.game.character.SpriteAnimator;
@@ -48,7 +50,9 @@ public final class Player {
         this.groundY = y;
         this.characters = new CharacterDefinition[] {
                 new TikbalangCharacter(),
-                new KapreCharacter()
+                new KapreCharacter(),
+                new AswangCharacter(),
+                new EngkantoCharacter()
         };
         this.animator = new SpriteAnimator();
     }
@@ -88,13 +92,13 @@ public final class Player {
             startJump();
         }
 
-        updateJump(deltaSeconds);
+        updateJump(keyboardInput.isGlidePressed(), deltaSeconds);
         getActiveCharacter().update(this, deltaSeconds);
         x += (movementVelocity + getActiveCharacter().getHorizontalVelocity()) * deltaSeconds;
         landOnPlatformIfFalling(platforms, previousBottom);
 
         if (animator.getAction() == PlayerAction.JUMP && !animator.isLocked()) {
-            updateJumpFrame(deltaSeconds);
+            updateJumpFrame(keyboardInput.isGlidePressed(), deltaSeconds);
         } else {
             animator.update(deltaSeconds, getActiveCharacter());
         }
@@ -219,7 +223,7 @@ public final class Player {
         return null;
     }
 
-    private void updateJump(double deltaSeconds) {
+    private void updateJump(boolean glideHeld, double deltaSeconds) {
         if (landingFrameRemaining > 0.0) {
             landingFrameRemaining = Math.max(0.0, landingFrameRemaining - deltaSeconds);
         }
@@ -229,7 +233,13 @@ public final class Player {
 
         jumpElapsedSeconds += deltaSeconds;
         y += verticalVelocity * deltaSeconds;
-        verticalVelocity += GRAVITY_PIXELS_PER_SECOND * deltaSeconds;
+        verticalVelocity += GRAVITY_PIXELS_PER_SECOND
+                * getActiveCharacter().getGravityScale(this, glideHeld)
+                * deltaSeconds;
+        verticalVelocity = Math.min(
+                verticalVelocity,
+                getActiveCharacter().getMaximumFallVelocity(this, glideHeld)
+        );
 
         if (y >= groundY) {
             y = groundY;
@@ -244,7 +254,7 @@ public final class Player {
         landingFrameRemaining = 0.0;
     }
 
-    private void updateJumpFrame(double deltaSeconds) {
+    private void updateJumpFrame(boolean glideHeld, double deltaSeconds) {
         if (landingFrameRemaining > 0.0) {
             animator.setFrameIndex(3);
             return;
@@ -256,7 +266,7 @@ public final class Player {
             } else if (verticalVelocity < 0.0) {
                 animator.setFrameIndex(1);
             } else {
-                animator.setFrameIndex(2);
+                animator.setFrameIndex(getActiveCharacter().getFallingJumpFrame(this, glideHeld));
             }
             return;
         }
