@@ -4,6 +4,7 @@ import com.engkanto.client.game.entity.Player;
 import com.engkanto.client.game.world.Platform;
 import com.engkanto.client.input.KeyboardInput;
 import com.engkanto.client.render.DebugRenderer;
+import com.engkanto.client.game.combat.HealthUI;
 
 import javax.swing.JPanel;
 import java.awt.Color;
@@ -18,6 +19,7 @@ public final class GamePanel extends JPanel implements Runnable {
     private final List<Platform> platforms;
     private final Player player;
     private final DebugRenderer debugRenderer;
+    private final HealthUI healthUI;
 
     private Thread gameThread;
     private boolean running;
@@ -30,6 +32,7 @@ public final class GamePanel extends JPanel implements Runnable {
                 getGroundPlatformTop() - Player.SIZE
         );
         debugRenderer = new DebugRenderer();
+        healthUI = new HealthUI(player);
 
         setPreferredSize(new Dimension(GameConfig.SCREEN_WIDTH, GameConfig.SCREEN_HEIGHT));
         setBackground(new Color(28, 36, 32));
@@ -73,6 +76,12 @@ public final class GamePanel extends JPanel implements Runnable {
     }
 
     private void update(double deltaSeconds) {
+        if (keyboardInput.consumeDamageRequested()) {
+            player.takeDamage(25.0);
+        }
+        if (keyboardInput.consumeHealRequested()) {
+            player.heal(25.0);
+        }
         player.update(keyboardInput, platforms, deltaSeconds);
     }
 
@@ -85,6 +94,7 @@ public final class GamePanel extends JPanel implements Runnable {
             drawWorld(graphics2D);
             drawPlatforms(graphics2D);
             player.draw(graphics2D);
+            healthUI.draw(graphics2D);
             debugRenderer.drawHud(graphics2D);
         } finally {
             graphics2D.dispose();
