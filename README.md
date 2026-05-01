@@ -48,26 +48,25 @@ logic, and message handling.
 Build the project:
 
 ```bash
-gradle build
+./gradlew build
 ```
 
 Run the server:
 
 ```bash
-gradle runServer
+./gradlew runServer
 ```
 
 Run a client:
 
 ```bash
-gradle runClient
+./gradlew runClient
 ```
 
 Run tests:
 
 ```bash
-gradle test
+./gradlew test
 ```
 
-After a Gradle wrapper is generated, the same commands can be run with
-`./gradlew` on Linux/macOS or `.\gradlew.bat` on Windows PowerShell.
+On Windows PowerShell, use `.\gradlew.bat` instead of `./gradlew`.
