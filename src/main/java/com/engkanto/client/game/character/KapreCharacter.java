@@ -12,8 +12,8 @@ import java.util.Iterator;
 import java.util.List;
 
 public final class KapreCharacter extends SpriteCharacter {
-    private static final int LOG_SOURCE_X = 615;
-    private static final int LOG_SOURCE_Y = 1065;
+    private static final int LOG_SOURCE_X = 610;
+    private static final int LOG_SOURCE_Y = 1035;
     private static final int LOG_SOURCE_SIZE = 150;
     private static final int THROW_LAST_FRAME_LEFT_TRIM = 42;
 
