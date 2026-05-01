@@ -28,7 +28,7 @@ public final class Player {
     private static final double MOVE_1_COOLDOWN_SECONDS = 0.35;
     private static final double MOVE_2_COOLDOWN_SECONDS = 0.65;
     private static final double MOVE_3_COOLDOWN_SECONDS = 1.10;
-    private static final double SPECIAL_COOLDOWN_SECONDS = 2.00;
+    private static final double SPECIAL_COOLDOWN_SECONDS = 10.00;
     private static final double JUMP_TAKEOFF_FRAME_SECONDS = 0.10;
     private static final double LANDING_FRAME_SECONDS = 0.16;
 
@@ -110,6 +110,8 @@ public final class Player {
     }
 
     public void update(KeyboardInput keyboardInput, List<Platform> platforms, double deltaSeconds) {
+        health.update(deltaSeconds);
+
         if (isDead()) {
             animator.update(deltaSeconds, getActiveCharacter());
             respawnTimerRemaining -= deltaSeconds;
@@ -154,10 +156,11 @@ public final class Player {
             startJump();
         }
 
+        dropThroughPlatformIfRequested(keyboardInput.isDownPressed(), platforms);
         updateJump(keyboardInput.isGlidePressed(), deltaSeconds);
         getActiveCharacter().update(this, deltaSeconds);
         x += (movementVelocity + getActiveCharacter().getHorizontalVelocity()) * deltaSeconds;
-        landOnPlatformIfFalling(platforms, previousBottom);
+        landOnPlatformIfFalling(platforms, previousBottom, keyboardInput.isDownPressed());
 
         if (animator.getAction() == PlayerAction.JUMP && !animator.isLocked()) {
             updateJumpFrame(keyboardInput.isGlidePressed(), deltaSeconds);
@@ -190,6 +193,14 @@ public final class Player {
         return damage;
     }
 
+    public boolean canActiveDirectAttackHit() {
+        return getActiveCharacter().canDirectAttackHit(animator.getAction(), animator.getFrameIndex());
+    }
+
+    public boolean applyActiveDirectAttack(HealthComponent target) {
+        return getActiveCharacter().applyDirectAttack(animator.getAction(), target, damage);
+    }
+
     public double getX() {
         return x;
     }
@@ -216,6 +227,26 @@ public final class Player {
 
     public String getCharacterName() {
         return getActiveCharacter().getName();
+    }
+
+    public double getCooldownRemaining(PlayerAction action) {
+        return switch (action) {
+            case MOVE_1 -> move1CooldownRemaining;
+            case MOVE_2 -> move2CooldownRemaining;
+            case MOVE_3 -> move3CooldownRemaining;
+            case SPECIAL -> specialCooldownRemaining;
+            default -> 0.0;
+        };
+    }
+
+    public double getCooldownDuration(PlayerAction action) {
+        return switch (action) {
+            case MOVE_1 -> getActionCooldown(PlayerAction.MOVE_1, MOVE_1_COOLDOWN_SECONDS);
+            case MOVE_2 -> getActionCooldown(PlayerAction.MOVE_2, MOVE_2_COOLDOWN_SECONDS);
+            case MOVE_3 -> getActionCooldown(PlayerAction.MOVE_3, MOVE_3_COOLDOWN_SECONDS);
+            case SPECIAL -> getActionCooldown(PlayerAction.SPECIAL, SPECIAL_COOLDOWN_SECONDS);
+            default -> 0.0;
+        };
     }
 
     public List<Projectile> getActiveCharacterProjectiles() {
@@ -266,7 +297,7 @@ public final class Player {
             if (specialCooldownRemaining > 0.0) {
                 return null;
             }
-            specialCooldownRemaining = SPECIAL_COOLDOWN_SECONDS;
+            specialCooldownRemaining = getActionCooldown(PlayerAction.SPECIAL, SPECIAL_COOLDOWN_SECONDS);
             getActiveCharacter().onSpecial(this);
             return PlayerAction.SPECIAL;
         }
@@ -274,7 +305,7 @@ public final class Player {
             if (move3CooldownRemaining > 0.0) {
                 return null;
             }
-            move3CooldownRemaining = MOVE_3_COOLDOWN_SECONDS;
+            move3CooldownRemaining = getActionCooldown(PlayerAction.MOVE_3, MOVE_3_COOLDOWN_SECONDS);
             getActiveCharacter().onMove3(this);
             return PlayerAction.MOVE_3;
         }
@@ -282,7 +313,7 @@ public final class Player {
             if (move2CooldownRemaining > 0.0) {
                 return null;
             }
-            move2CooldownRemaining = MOVE_2_COOLDOWN_SECONDS;
+            move2CooldownRemaining = getActionCooldown(PlayerAction.MOVE_2, MOVE_2_COOLDOWN_SECONDS);
             getActiveCharacter().onMove2(this);
             return PlayerAction.MOVE_2;
         }
@@ -290,11 +321,15 @@ public final class Player {
             if (move1CooldownRemaining > 0.0) {
                 return null;
             }
-            move1CooldownRemaining = MOVE_1_COOLDOWN_SECONDS;
+            move1CooldownRemaining = getActionCooldown(PlayerAction.MOVE_1, MOVE_1_COOLDOWN_SECONDS);
             getActiveCharacter().onMove1(this);
             return PlayerAction.MOVE_1;
         }
         return null;
+    }
+
+    private double getActionCooldown(PlayerAction action, double defaultCooldownSeconds) {
+        return Math.max(0.0, getActiveCharacter().getCooldown(action, defaultCooldownSeconds));
     }
 
     private void updateJump(boolean glideHeld, double deltaSeconds) {
@@ -352,8 +387,24 @@ public final class Player {
         return y >= groundY && verticalVelocity == 0.0;
     }
 
-    private void landOnPlatformIfFalling(List<Platform> platforms, double previousBottom) {
-        Platform standingPlatform = findStandingPlatform(platforms);
+    private void dropThroughPlatformIfRequested(boolean dropRequested, List<Platform> platforms) {
+        if (!dropRequested || verticalVelocity != 0.0) {
+            return;
+        }
+
+        Platform standingPlatform = findStandingPlatform(platforms, false);
+        if (standingPlatform == null || !standingPlatform.isPassThrough()) {
+            return;
+        }
+
+        y += 2.0;
+        groundY = GameConfig.SCREEN_HEIGHT - SIZE;
+        verticalVelocity = 1.0;
+        landingFrameRemaining = 0.0;
+    }
+
+    private void landOnPlatformIfFalling(List<Platform> platforms, double previousBottom, boolean dropRequested) {
+        Platform standingPlatform = findStandingPlatform(platforms, dropRequested);
         if (standingPlatform != null && verticalVelocity == 0.0) {
             groundY = standingPlatform.getTop() - SIZE;
             y = groundY;
@@ -365,6 +416,9 @@ public final class Player {
         }
 
         for (Platform platform : platforms) {
+            if (dropRequested && platform.isPassThrough()) {
+                continue;
+            }
             if (isLandingOn(platform, previousBottom)) {
                 y = platform.getTop() - SIZE;
                 groundY = y;
@@ -384,8 +438,11 @@ public final class Player {
         return crossesPlatformTop && overlapsHorizontally;
     }
 
-    private Platform findStandingPlatform(List<Platform> platforms) {
+    private Platform findStandingPlatform(List<Platform> platforms, boolean dropRequested) {
         for (Platform platform : platforms) {
+            if (dropRequested && platform.isPassThrough()) {
+                continue;
+            }
             if (isStandingOn(platform)) {
                 return platform;
             }

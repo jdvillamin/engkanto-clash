@@ -1,108 +1,112 @@
 # System Architecture
 
-Engkanto Clash uses a client-server architecture with an authoritative Java
-server. Each player runs a Java desktop client, and all clients connect to the
-same server through TCP sockets.
+This document describes the current codebase state. The repository still keeps
+client, server, and common package roots, but the implemented gameplay is
+currently a local Java Swing combat prototype. The server entry point is a
+placeholder and does not yet run an authoritative multiplayer game loop.
+
+## Current Runtime Flow
 
 ```text
-+----------------+        TCP Socket        +----------------+
-| Java Client 1  | <----------------------> |                |
-+----------------+                          |                |
-                                            |                |
-+----------------+        TCP Socket        |                |
-| Java Client 2  | <----------------------> |  Java Server   |
-+----------------+                          |                |
-                                            |                |
-+----------------+        TCP Socket        |                |
-| Java Client 3  | <----------------------> |                |
-+----------------+                          |                |
-                                            |                |
-+----------------+        TCP Socket        +----------------+
-| Java Client 4  | <----------------------> |
-+----------------+
+ClientMain
+  -> GameWindow
+      -> GamePanel
+          -> fixed update loop at 60 updates/second
+          -> Java2D render pass
 ```
 
-## Core Rule
+The client owns the current playable state:
 
-```text
-Client sends input.
-Server decides what happens.
-Client renders the result.
-```
+- keyboard input
+- player movement and character switching
+- platform collision and drop-through behavior
+- sprite animation
+- local test dummy combat
+- health, damage, healing, poison, death, and respawn
+- projectile spawning, movement, collision, and one-shot hit behavior
+- health and ability cooldown UI
 
-The client is responsible for presentation and input. The server is responsible
-for game truth.
-
-## Client Responsibilities
-
-- open the game window
-- run the render loop
-- read keyboard input
-- load and draw sprites
-- send player actions to the server
-- render the latest game state from the server
-- display chat messages
-
-## Server Responsibilities
-
-- accept client connections
-- assign player IDs
-- track connected players
-- maintain the official game state
-- process movement and attacks
-- resolve collisions, damage, deaths, and scores
-- broadcast state updates to all clients
-- relay chat messages
-
-## Message Flow
-
-Client-to-server messages:
-
-- `JOIN_GAME`
-- `MOVE_UP`
-- `MOVE_DOWN`
-- `MOVE_LEFT`
-- `MOVE_RIGHT`
-- `ATTACK`
-- `CHAT_MESSAGE`
-
-Server-to-client messages:
-
-- `WELCOME`
-- `PLAYER_JOINED`
-- `GAME_STATE_UPDATE`
-- `PLAYER_HIT`
-- `PLAYER_LEFT`
-- `CHAT_BROADCAST`
-
-## Gameplay Flow
-
-```text
-Player presses W.
-Client sends MOVE_UP to the server.
-Server updates that player's position.
-Server broadcasts GAME_STATE_UPDATE.
-All clients redraw the updated player positions.
-```
-
-## Chat Flow
-
-```text
-Client sends CHAT_MESSAGE.
-Server receives the message.
-Server broadcasts CHAT_BROADCAST.
-All clients display the message.
-```
-
-## Package Mapping
+## Important Packages
 
 ```text
 com.engkanto.client
-Desktop client entry point, rendering, input, and local client state.
+Desktop entry point and Swing window.
+
+com.engkanto.client.input
+Keyboard state and one-shot action requests.
+
+com.engkanto.client.game
+Game loop, arena setup, rendering order, player-vs-dummy hit resolution.
+
+com.engkanto.client.game.character
+Character definitions, sprite animation metadata, per-character movement,
+cooldown, projectile, and attack rules.
+
+com.engkanto.client.game.combat
+Health, damage, poison, floating damage numbers, health UI, and ability UI.
+
+com.engkanto.client.game.entity
+Player, projectile, and test dummy entities.
+
+com.engkanto.client.game.world
+Platform geometry and tile rendering.
+
+com.engkanto.client.render
+Sprite and asset loading helpers plus debug HUD rendering.
 
 com.engkanto.server
-Server entry point, connection handling, and authoritative game loop.
+Placeholder server entry point.
 
 com.engkanto.common
-Shared models, network messages, constants, and simple utility classes.
+Reserved for future shared model/network code.
 ```
+
+## Combat Flow
+
+```text
+KeyboardInput records a move request.
+Player consumes the request if the move is not on cooldown.
+SpriteAnimator locks the requested attack animation.
+CharacterDefinition customizes attack timing, cooldown, movement lock, and hit behavior.
+GamePanel checks player/test-dummy overlap for direct attacks.
+GamePanel checks projectile/test-dummy hitbox overlap for projectiles.
+DamageComponent applies actual clamped damage to HealthComponent.
+HealthComponent emits damage, heal, and death events.
+```
+
+## Collision Model
+
+- Player world bounds use a `96x96` sprite rectangle.
+- The test dummy exposes a `48x72` hitbox.
+- Direct attacks use player rectangle vs. test dummy hitbox overlap.
+- Projectiles use projectile square vs. test dummy hitbox overlap.
+- Floating platforms can be dropped through by holding Down.
+- The ground platform remains solid.
+
+## UI Model
+
+The current UI is drawn directly in Java2D:
+
+- `HealthUI` draws player health.
+- `AbilityUI` draws `J`, `K`, `E`, and `L` key icons with cooldown state.
+- `DebugRenderer` draws development control hints.
+- `TestDummy` draws its own label, health bar, hit flash, death label, and
+  damage numbers.
+
+## Testing
+
+JUnit coverage currently focuses on `HealthComponent`, including:
+
+- damage and healing clamp behavior
+- dead entities ignoring healing
+- full-heal reporting
+- invalid value handling
+- poison tick timing
+
+## Future Architecture Work
+
+The original project target includes networked multiplayer with an
+authoritative server. That is not implemented yet. Future work should move
+game-state authority, player synchronization, hit resolution, and chat into the
+server/common layers while keeping the Swing client focused on input and
+rendering.

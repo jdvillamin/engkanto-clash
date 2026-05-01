@@ -4,6 +4,8 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.List;
 
+import com.engkanto.client.game.combat.DamageComponent;
+import com.engkanto.client.game.combat.HealthComponent;
 import com.engkanto.client.game.entity.Player;
 import com.engkanto.client.game.entity.Projectile;
 
@@ -59,6 +61,18 @@ public interface CharacterDefinition {
 
     default boolean locksMovement(PlayerAction action) {
         return false;
+    }
+
+    default double getCooldown(PlayerAction action, double defaultCooldownSeconds) {
+        return defaultCooldownSeconds;
+    }
+
+    default boolean canDirectAttackHit(PlayerAction action, int frameIndex) {
+        return true;
+    }
+
+    default boolean applyDirectAttack(PlayerAction action, HealthComponent target, DamageComponent damage) {
+        return damage.hit(target) > 0.0;
     }
 
     default List<Projectile> getProjectiles() {
