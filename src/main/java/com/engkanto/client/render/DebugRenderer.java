@@ -13,6 +13,6 @@ public final class DebugRenderer {
         graphics.setFont(HUD_FONT);
         graphics.setColor(new Color(242, 232, 194));
         graphics.drawString("Character Sprite Test", 16, 24);
-        graphics.drawString("P switch | A/D walk | W jump | S idle | J/K/E moves | L ult | Z death", 16, GameConfig.SCREEN_HEIGHT - 16);
+        graphics.drawString("P switch | A/D walk | W jump | S idle | J/K/E moves | L ult | Z death | X damage self | C heal self", 16, GameConfig.SCREEN_HEIGHT - 16);
     }
 }

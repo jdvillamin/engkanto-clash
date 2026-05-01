@@ -8,6 +8,8 @@ import com.engkanto.client.game.character.KapreCharacter;
 import com.engkanto.client.game.character.PlayerAction;
 import com.engkanto.client.game.character.SpriteAnimator;
 import com.engkanto.client.game.character.TikbalangCharacter;
+import com.engkanto.client.game.combat.HealthComponent;
+import com.engkanto.client.game.combat.HealthListener;  
 import com.engkanto.client.game.world.Platform;
 import com.engkanto.client.input.KeyboardInput;
 
@@ -17,6 +19,7 @@ import java.util.List;
 
 public final class Player {
     public static final int SIZE = 96;
+    private static final double MAX_HEALTH = 100.0; 
 
     private static final double SPEED_PIXELS_PER_SECOND = 180.0;
     private static final double JUMP_VELOCITY_PIXELS_PER_SECOND = -560.0;
@@ -30,6 +33,7 @@ public final class Player {
 
     private final CharacterDefinition[] characters;
     private final SpriteAnimator animator;
+    private final HealthComponent health;
     private int activeCharacterIndex;
 
     private double x;
@@ -55,9 +59,55 @@ public final class Player {
                 new EngkantoCharacter()
         };
         this.animator = new SpriteAnimator();
+        this.health = new HealthComponent(MAX_HEALTH); 
+        
+        health.addListener(new HealthListener() {
+            @Override
+            public void onDamage(double damage) {
+
+            }
+            
+            @Override
+            public void onHeal(double amount) {
+            }
+            
+            @Override
+            public void onDeath() {
+                animator.playOnce(PlayerAction.DEATH);
+            }
+        });
+    }
+
+    public void takeDamage(double damage) {
+        health.takeDamage(damage);
+    }
+    
+    public void heal(double amount) {
+        health.heal(amount);
+    }
+    
+    public double getHealth() {
+        return health.getCurrentHealth();
+    }
+    
+    public double getMaxHealth() {
+        return health.getMaxHealth();
+    }
+    
+    public double getHealthPercentage() {
+        return health.getHealthPercentage();
+    }
+    
+    public boolean isDead() {
+        return health.isDead();
     }
 
     public void update(KeyboardInput keyboardInput, List<Platform> platforms, double deltaSeconds) {
+        if (isDead()) {
+            animator.update(deltaSeconds, getActiveCharacter());
+            return;
+        }
+
         updateCooldowns(deltaSeconds);
         switchCharacterIfRequested(keyboardInput);
 
@@ -118,6 +168,10 @@ public final class Player {
         }
 
         getActiveCharacter().drawEffects(graphics);
+    }
+
+    public HealthComponent getHealthComponent() {
+        return health;
     }
 
     public double getX() {

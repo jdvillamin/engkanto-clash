@@ -13,6 +13,8 @@ public final class KeyboardInput extends KeyAdapter {
     private boolean move3Pressed;
     private boolean specialPressed;
     private boolean deathPressed;
+    private boolean damagePressed;
+    private boolean healPressed;
     private boolean glidePressed;
     private boolean switchCharacterPressed;
     private boolean move1Requested;
@@ -20,6 +22,8 @@ public final class KeyboardInput extends KeyAdapter {
     private boolean move3Requested;
     private boolean specialRequested;
     private boolean deathRequested;
+    private boolean damageRequested;
+    private boolean healRequested;
     private boolean switchCharacterRequested;
 
     @Override
@@ -98,6 +102,18 @@ public final class KeyboardInput extends KeyAdapter {
         return requested;
     }
 
+    public boolean consumeDamageRequested() {
+        boolean requested = damageRequested;
+        damageRequested = false;
+        return requested;
+    }
+
+    public boolean consumeHealRequested() {
+        boolean requested = healRequested;
+        healRequested = false;
+        return requested;
+    }
+
     public boolean consumeSwitchCharacterRequested() {
         boolean requested = switchCharacterRequested;
         switchCharacterRequested = false;
@@ -151,6 +167,18 @@ public final class KeyboardInput extends KeyAdapter {
                     deathRequested = true;
                 }
                 deathPressed = pressed;
+                break;
+            case KeyEvent.VK_X:
+                if (pressed && !damagePressed) {
+                    damageRequested = true;
+                }
+                damagePressed = pressed;
+                break;
+            case KeyEvent.VK_C:
+                if (pressed && !healPressed) {
+                    healRequested = true;
+                }
+                healPressed = pressed;
                 break;
             case KeyEvent.VK_SPACE:
                 glidePressed = pressed;
