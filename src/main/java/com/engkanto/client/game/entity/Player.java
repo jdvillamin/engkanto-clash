@@ -111,10 +111,36 @@ public final class Player {
                 animator.getFrameIndex()
         );
 
+        int bottomPadding = getBottomPadding(frame);
+        int scaledBottomPadding = (int) Math.round(bottomPadding * SIZE / (double) frame.getHeight());
+        int drawY = (int) (y + scaledBottomPadding);
+
         if (facingLeft) {
-            graphics.drawImage(frame, (int) x + SIZE, (int) y, -SIZE, SIZE, null);
+            graphics.drawImage(
+                    frame,
+                    (int) x + SIZE,
+                    drawY,
+                    (int) x,
+                    drawY + SIZE,
+                    0,
+                    0,
+                    frame.getWidth(),
+                    frame.getHeight(),
+                    null
+            );
         } else {
-            graphics.drawImage(frame, (int) x, (int) y, SIZE, SIZE, null);
+            graphics.drawImage(
+                    frame,
+                    (int) x,
+                    drawY,
+                    (int) x + SIZE,
+                    drawY + SIZE,
+                    0,
+                    0,
+                    frame.getWidth(),
+                    frame.getHeight(),
+                    null
+            );
         }
 
         getActiveCharacter().drawEffects(graphics);
@@ -361,5 +387,17 @@ public final class Player {
 
     private double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(value, max));
+    }
+
+    private static int getBottomPadding(BufferedImage frame) {
+        for (int row = frame.getHeight() - 1; row >= 0; row--) {
+            for (int column = 0; column < frame.getWidth(); column++) {
+                int alpha = (frame.getRGB(column, row) >>> 24) & 0xFF;
+                if (alpha != 0) {
+                    return frame.getHeight() - 1 - row;
+                }
+            }
+        }
+        return 0;
     }
 }
