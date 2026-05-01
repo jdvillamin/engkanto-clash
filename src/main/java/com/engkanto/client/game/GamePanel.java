@@ -112,10 +112,10 @@ public final class GamePanel extends JPanel implements Runnable {
 
     private List<Platform> createPlatforms() {
         List<Platform> mapPlatforms = new ArrayList<>();
-        mapPlatforms.add(new Platform(0, 480, GameConfig.SCREEN_WIDTH, 96));
-        mapPlatforms.add(new Platform(96, 350, 184, 24));
-        mapPlatforms.add(new Platform(520, 350, 184, 24));
-        mapPlatforms.add(new Platform(308, 220, 184, 24));
+        mapPlatforms.add(new Platform(0, 480, GameConfig.SCREEN_WIDTH, 96, Platform.Type.GROUND));
+        mapPlatforms.add(new Platform(96, 350, 184, 24, Platform.Type.FLOATING));
+        mapPlatforms.add(new Platform(520, 350, 184, 24, Platform.Type.FLOATING));
+        mapPlatforms.add(new Platform(308, 220, 184, 24, Platform.Type.FLOATING));
         return mapPlatforms;
     }
 
