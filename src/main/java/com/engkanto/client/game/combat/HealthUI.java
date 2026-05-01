@@ -9,7 +9,7 @@ import java.util.Objects;
 
 public class HealthUI {
     private static final int X = 20;
-    private static final int Y = 20;
+    private static final int Y = 30;
     private static final int BAR_WIDTH = 200;
     private static final int BAR_HEIGHT = 20;
     private static final int TEXT_OFFSET_X = 220;

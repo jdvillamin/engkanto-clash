@@ -1,16 +1,16 @@
 package com.engkanto.client.game.character;
 
-import com.engkanto.client.game.GameConfig;
-import com.engkanto.client.game.entity.Player;
-import com.engkanto.client.game.entity.Projectile;
-import com.engkanto.client.render.AssetLoader;
-import com.engkanto.client.render.SpriteSheet;
-
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+
+import com.engkanto.client.game.GameConfig;
+import com.engkanto.client.game.entity.Player;
+import com.engkanto.client.game.entity.Projectile;
+import com.engkanto.client.render.AssetLoader;
+import com.engkanto.client.render.SpriteSheet;
 
 public final class EngkantoCharacter extends SpriteCharacter {
     private static final int MOVE_1_PROJECTILE_SOURCE_X = 606;
@@ -290,5 +290,10 @@ public final class EngkantoCharacter extends SpriteCharacter {
         private boolean isActive() {
             return active;
         }
+    }
+
+    @Override
+    public List<Projectile> getProjectiles() {
+        return projectiles;
     }
 }

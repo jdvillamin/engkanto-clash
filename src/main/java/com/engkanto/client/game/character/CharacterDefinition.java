@@ -1,9 +1,11 @@
 package com.engkanto.client.game.character;
 
-import com.engkanto.client.game.entity.Player;
-
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.util.List;
+
+import com.engkanto.client.game.entity.Player;
+import com.engkanto.client.game.entity.Projectile;
 
 public interface CharacterDefinition {
     String getName();
@@ -57,5 +59,9 @@ public interface CharacterDefinition {
 
     default boolean locksMovement(PlayerAction action) {
         return false;
+    }
+
+    default List<Projectile> getProjectiles() {
+        return java.util.Collections.emptyList();
     }
 }

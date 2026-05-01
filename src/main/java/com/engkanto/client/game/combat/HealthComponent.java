@@ -58,6 +58,13 @@ public class HealthComponent {
             notifyHeal(actualHeal);
         }
     }
+
+    public void revive() {
+        if (!isDead) return;
+        isDead = false;
+        currentHealth = maxHealth;
+        notifyHeal(maxHealth);
+    }
     
     public void addListener(HealthListener listener) {
         if (listener != null) {

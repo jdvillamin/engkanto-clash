@@ -1,15 +1,15 @@
 package com.engkanto.client.game.character;
 
-import com.engkanto.client.game.entity.Player;
-import com.engkanto.client.game.entity.Projectile;
-import com.engkanto.client.render.AssetLoader;
-import com.engkanto.client.render.SpriteSheet;
-
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+
+import com.engkanto.client.game.entity.Player;
+import com.engkanto.client.game.entity.Projectile;
+import com.engkanto.client.render.AssetLoader;
+import com.engkanto.client.render.SpriteSheet;
 
 public final class KapreCharacter extends SpriteCharacter {
     private static final int LOG_SOURCE_X = 610;
@@ -115,5 +115,10 @@ public final class KapreCharacter extends SpriteCharacter {
                 iterator.remove();
             }
         }
+    }
+
+    @Override
+    public List<Projectile> getProjectiles() {
+        return projectiles;
     }
 }

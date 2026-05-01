@@ -1,12 +1,5 @@
 package com.engkanto.client.game;
 
-import com.engkanto.client.game.entity.Player;
-import com.engkanto.client.game.world.Platform;
-import com.engkanto.client.input.KeyboardInput;
-import com.engkanto.client.render.DebugRenderer;
-import com.engkanto.client.game.combat.HealthUI;
-
-import javax.swing.JPanel;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
@@ -14,10 +7,22 @@ import java.awt.Graphics2D;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.swing.JPanel;
+
+import com.engkanto.client.game.character.PlayerAction;
+import com.engkanto.client.game.combat.HealthUI;
+import com.engkanto.client.game.entity.Player;
+import com.engkanto.client.game.entity.Projectile;
+import com.engkanto.client.game.entity.TestDummy;
+import com.engkanto.client.game.world.Platform;
+import com.engkanto.client.input.KeyboardInput;
+import com.engkanto.client.render.DebugRenderer;
+
 public final class GamePanel extends JPanel implements Runnable {
     private final KeyboardInput keyboardInput;
     private final List<Platform> platforms;
     private final Player player;
+    private final TestDummy dummy;
     private final DebugRenderer debugRenderer;
     private final HealthUI healthUI;
 
@@ -31,6 +36,8 @@ public final class GamePanel extends JPanel implements Runnable {
                 GameConfig.SCREEN_WIDTH / 2.0 - Player.SIZE / 2.0,
                 getGroundPlatformTop() - Player.SIZE
         );
+        dummy = new TestDummy(350, getGroundPlatformTop() - TestDummy.HEIGHT);
+
         debugRenderer = new DebugRenderer();
         healthUI = new HealthUI(player);
 
@@ -83,6 +90,39 @@ public final class GamePanel extends JPanel implements Runnable {
             player.heal(25.0);
         }
         player.update(keyboardInput, platforms, deltaSeconds);
+        dummy.update(deltaSeconds);
+        resolvePlayerAttacks();
+        resolveProjectileHits();
+    }
+
+    private void resolvePlayerAttacks() {
+        if (player.isDead() || dummy.getHealthComponent().isDead()) return;
+
+        PlayerAction action = player.getCurrentAction();
+        boolean isAttacking = action == PlayerAction.MOVE_1
+                        || action == PlayerAction.MOVE_2
+                        || action == PlayerAction.MOVE_3
+                        || action == PlayerAction.SPECIAL;
+
+        if (!isAttacking || !player.isActionLocked()) return;
+
+        boolean overlaps = player.getX() + Player.SIZE > dummy.getLeft()
+                        && player.getX()               < dummy.getRight();
+
+        if (overlaps) {
+            player.getActiveDamageComponent().hit(dummy.getHealthComponent());
+        }
+    }
+
+    private void resolveProjectileHits() {
+        for (Projectile projectile : player.getActiveCharacterProjectiles()) {
+            if (!projectile.isActive()) continue;
+            boolean overlaps = projectile.getX() + Projectile.DRAW_SIZE > dummy.getLeft()
+                            && projectile.getX()                         < dummy.getRight();
+            if (overlaps) {
+                projectile.hit(dummy.getHealthComponent());
+            }
+        }
     }
 
     @Override
@@ -94,6 +134,7 @@ public final class GamePanel extends JPanel implements Runnable {
             drawWorld(graphics2D);
             drawPlatforms(graphics2D);
             player.draw(graphics2D);
+            dummy.draw(graphics2D);
             healthUI.draw(graphics2D);
             debugRenderer.drawHud(graphics2D);
         } finally {
