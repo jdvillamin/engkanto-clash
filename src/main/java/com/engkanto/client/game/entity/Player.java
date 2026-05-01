@@ -1,5 +1,9 @@
 package com.engkanto.client.game.entity;
 
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.util.List;
+
 import com.engkanto.client.game.GameConfig;
 import com.engkanto.client.game.character.AswangCharacter;
 import com.engkanto.client.game.character.CharacterDefinition;
@@ -8,14 +12,11 @@ import com.engkanto.client.game.character.KapreCharacter;
 import com.engkanto.client.game.character.PlayerAction;
 import com.engkanto.client.game.character.SpriteAnimator;
 import com.engkanto.client.game.character.TikbalangCharacter;
+import com.engkanto.client.game.combat.DamageComponent;
 import com.engkanto.client.game.combat.HealthComponent;
-import com.engkanto.client.game.combat.HealthListener;  
+import com.engkanto.client.game.combat.HealthListener;
 import com.engkanto.client.game.world.Platform;
 import com.engkanto.client.input.KeyboardInput;
-
-import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
-import java.util.List;
 
 public final class Player {
     public static final int SIZE = 96;
@@ -34,6 +35,7 @@ public final class Player {
     private final CharacterDefinition[] characters;
     private final SpriteAnimator animator;
     private final HealthComponent health;
+    private final DamageComponent damage;
     private int activeCharacterIndex;
 
     private double x;
@@ -48,6 +50,9 @@ public final class Player {
     private double jumpElapsedSeconds;
     private double landingFrameRemaining;
 
+    private double respawnTimerRemaining;
+    private static final double RESPAWN_SECONDS = 1.0;
+
     public Player(double x, double y) {
         this.x = x;
         this.y = y;
@@ -60,6 +65,7 @@ public final class Player {
         };
         this.animator = new SpriteAnimator();
         this.health = new HealthComponent(MAX_HEALTH); 
+        this.damage = new DamageComponent(25.0);
         
         health.addListener(new HealthListener() {
             @Override
@@ -74,6 +80,7 @@ public final class Player {
             @Override
             public void onDeath() {
                 animator.playOnce(PlayerAction.DEATH);
+                respawnTimerRemaining = RESPAWN_SECONDS;
             }
         });
     }
@@ -105,6 +112,11 @@ public final class Player {
     public void update(KeyboardInput keyboardInput, List<Platform> platforms, double deltaSeconds) {
         if (isDead()) {
             animator.update(deltaSeconds, getActiveCharacter());
+            respawnTimerRemaining -= deltaSeconds;
+            if (respawnTimerRemaining <= 0.0) {
+                health.revive();
+                animator.resetToIdle();
+            }
             return;
         }
 
@@ -174,6 +186,10 @@ public final class Player {
         return health;
     }
 
+    public DamageComponent getActiveDamageComponent() {
+        return damage;
+    }
+
     public double getX() {
         return x;
     }
@@ -200,6 +216,10 @@ public final class Player {
 
     public String getCharacterName() {
         return getActiveCharacter().getName();
+    }
+
+    public List<Projectile> getActiveCharacterProjectiles() {
+        return getActiveCharacter().getProjectiles();
     }
 
     private void switchCharacterIfRequested(KeyboardInput keyboardInput) {
