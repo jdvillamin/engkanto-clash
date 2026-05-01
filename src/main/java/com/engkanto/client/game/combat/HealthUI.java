@@ -1,11 +1,11 @@
 package com.engkanto.client.game.combat;
 
 import com.engkanto.client.game.entity.Player;
-import com.engkanto.client.game.combat.HealthComponent;
 
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
+import java.util.Objects;
 
 public class HealthUI {
     private static final int X = 20;
@@ -19,33 +19,49 @@ public class HealthUI {
     private final Font font = new Font("Arial", Font.BOLD, 16);
     
     public HealthUI(Player player) {
-        this.health = player.getHealthComponent();
+        this.health = Objects.requireNonNull(
+                Objects.requireNonNull(player, "player").getHealthComponent(),
+                "health"
+        );
     }
     
     public void draw(Graphics2D graphics) {
-        graphics.setFont(font);
-        
-        double healthPercent = health.getHealthPercentage();
-        
-        graphics.setColor(Color.BLACK);
-        graphics.fillRoundRect(X - 2, Y - 2, BAR_WIDTH + 4, BAR_HEIGHT + 4, 8, 8);
-        
-        graphics.setColor(Color.RED);
-        graphics.fillRoundRect(X, Y, BAR_WIDTH, BAR_HEIGHT, 6, 6);
-        
-        graphics.setColor(getHealthColor(healthPercent));
-        int healthWidth = (int) (BAR_WIDTH * healthPercent);
-        graphics.fillRoundRect(X, Y, healthWidth, BAR_HEIGHT, 6, 6);
-        
-        graphics.setColor(Color.WHITE);
-        String healthText = String.format("%.0f/%.0f", 
-            health.getCurrentHealth(), health.getMaxHealth());
-        graphics.drawString(healthText, TEXT_OFFSET_X, TEXT_OFFSET_Y);
+        Objects.requireNonNull(graphics, "graphics");
+
+        Font originalFont = graphics.getFont();
+        Color originalColor = graphics.getColor();
+        try {
+            graphics.setFont(font);
+            
+            double healthPercent = clamp(health.getHealthPercentage(), 0.0, 1.0);
+            
+            graphics.setColor(Color.BLACK);
+            graphics.fillRoundRect(X - 2, Y - 2, BAR_WIDTH + 4, BAR_HEIGHT + 4, 8, 8);
+            
+            graphics.setColor(Color.RED);
+            graphics.fillRoundRect(X, Y, BAR_WIDTH, BAR_HEIGHT, 6, 6);
+            
+            graphics.setColor(getHealthColor(healthPercent));
+            int healthWidth = (int) Math.round(BAR_WIDTH * healthPercent);
+            graphics.fillRoundRect(X, Y, healthWidth, BAR_HEIGHT, 6, 6);
+            
+            graphics.setColor(Color.WHITE);
+            String healthText = String.format("%.0f/%.0f", 
+                health.getCurrentHealth(), health.getMaxHealth());
+            graphics.drawString(healthText, TEXT_OFFSET_X, TEXT_OFFSET_Y);
+        } finally {
+            graphics.setFont(originalFont);
+            graphics.setColor(originalColor);
+        }
     }
     
     private Color getHealthColor(double percent) {
         if (percent > 0.6) return new Color(0, 255, 0);
         if (percent > 0.3) return new Color(255, 255, 0);
         return new Color(255, 0, 0);                      
+    }
+
+    private double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(value, max));
     }
 }

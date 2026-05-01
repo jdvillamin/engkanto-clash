@@ -11,30 +11,35 @@ public class HealthComponent {
     private final List<HealthListener> listeners = new ArrayList<>();
 
     public HealthComponent(double maxHealth) {
-        this.maxHealth = Math.max(1.0, maxHealth);
+        this.maxHealth = sanitizeMaxHealth(maxHealth);
         this.currentHealth = this.maxHealth;
     }
 
     public void takeDamage(double damage) {
-        if (isDead || damage <= 0) return;
+        if (isDead || !isPositiveFinite(damage)) return;
         
         double oldHealth = currentHealth;
         currentHealth = Math.max(0.0, currentHealth - damage);
+        double actualDamage = oldHealth - currentHealth;
         
-        if (currentHealth <= 0.0) {
+        if (actualDamage > 0.0) {
+            notifyDamage(actualDamage);
+        }
+        if (currentHealth <= 0.0 && !isDead) {
             isDead = true;
             notifyDeath();
-        } else {
-            notifyDamage(damage);
         }
     }
     
     public void heal(double amount) {
-        if (isDead || amount <= 0) return;
+        if (isDead || !isPositiveFinite(amount)) return;
         
         double oldHealth = currentHealth;
         currentHealth = Math.min(maxHealth, currentHealth + amount);
-        notifyHeal(currentHealth - oldHealth);
+        double actualHeal = currentHealth - oldHealth;
+        if (actualHeal > 0.0) {
+            notifyHeal(actualHeal);
+        }
     }
 
     public void kill() {
@@ -46,8 +51,12 @@ public class HealthComponent {
 
     public void fullHeal() {
         if (isDead) return;
+        double oldHealth = currentHealth;
         currentHealth = maxHealth;
-        notifyHeal(maxHealth - currentHealth);
+        double actualHeal = currentHealth - oldHealth;
+        if (actualHeal > 0.0) {
+            notifyHeal(actualHeal);
+        }
     }
     
     public void addListener(HealthListener listener) {
@@ -62,9 +71,20 @@ public class HealthComponent {
     
     public double getCurrentHealth() { return currentHealth; }
     public double getMaxHealth() { return maxHealth; }
-    public double getHealthPercentage() { return maxHealth > 0 ? currentHealth / maxHealth : 0.0; }
+    public double getHealthPercentage() { return currentHealth / maxHealth; }
     public boolean isDead() { return isDead; }
     public boolean isFullHealth() { return Math.abs(currentHealth - maxHealth) < 0.01; }
+
+    private double sanitizeMaxHealth(double value) {
+        if (!Double.isFinite(value) || value <= 0.0) {
+            return 1.0;
+        }
+        return value;
+    }
+
+    private boolean isPositiveFinite(double value) {
+        return Double.isFinite(value) && value > 0.0;
+    }
     
     private void notifyDamage(double damage) {
         for (HealthListener listener : new ArrayList<>(listeners)) {
