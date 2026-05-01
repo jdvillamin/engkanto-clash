@@ -111,6 +111,10 @@ public final class Platform {
         return x + width;
     }
 
+    public boolean isPassThrough() {
+        return type == Type.FLOATING;
+    }
+
     private BufferedImage selectTile(int row, int column, int columns) {
         boolean isTopRow = row == 0;
         boolean isLeftEdge = column == 0;

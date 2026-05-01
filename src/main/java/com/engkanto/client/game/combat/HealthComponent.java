@@ -7,6 +7,7 @@ public class HealthComponent {
     private double currentHealth;
     private final double maxHealth;
     private boolean isDead = false;
+    private final List<PoisonEffect> poisonEffects = new ArrayList<>();
     
     private final List<HealthListener> listeners = new ArrayList<>();
 
@@ -42,10 +43,40 @@ public class HealthComponent {
         }
     }
 
+    public void update(double deltaSeconds) {
+        if (isDead || !isPositiveFinite(deltaSeconds)) {
+            return;
+        }
+
+        for (int index = poisonEffects.size() - 1; index >= 0; index--) {
+            PoisonEffect poison = poisonEffects.get(index);
+            boolean expired = poison.update(this, deltaSeconds);
+            if (isDead) {
+                return;
+            }
+            if (expired) {
+                poisonEffects.remove(index);
+            }
+        }
+    }
+
+    public boolean applyPoison(double damagePerTick, double tickIntervalSeconds, double durationSeconds) {
+        if (isDead
+                || !isPositiveFinite(damagePerTick)
+                || !isPositiveFinite(tickIntervalSeconds)
+                || !isPositiveFinite(durationSeconds)) {
+            return false;
+        }
+
+        poisonEffects.add(new PoisonEffect(damagePerTick, tickIntervalSeconds, durationSeconds));
+        return true;
+    }
+
     public void kill() {
         if (isDead) return;
         currentHealth = 0.0;
         isDead = true;
+        poisonEffects.clear();
         notifyDeath();
     }
 
@@ -63,6 +94,7 @@ public class HealthComponent {
         if (!isDead) return;
         isDead = false;
         currentHealth = maxHealth;
+        poisonEffects.clear();
         notifyHeal(maxHealth);
     }
     
@@ -106,8 +138,36 @@ public class HealthComponent {
     }
     
     private void notifyDeath() {
+        poisonEffects.clear();
         for (HealthListener listener : new ArrayList<>(listeners)) {
             listener.onDeath();
+        }
+    }
+
+    private static final class PoisonEffect {
+        private final double damagePerTick;
+        private final double tickIntervalSeconds;
+        private double secondsRemaining;
+        private double secondsUntilNextTick;
+
+        private PoisonEffect(double damagePerTick, double tickIntervalSeconds, double durationSeconds) {
+            this.damagePerTick = damagePerTick;
+            this.tickIntervalSeconds = tickIntervalSeconds;
+            this.secondsRemaining = durationSeconds;
+            this.secondsUntilNextTick = tickIntervalSeconds;
+        }
+
+        private boolean update(HealthComponent health, double deltaSeconds) {
+            double elapsedSeconds = Math.min(deltaSeconds, secondsRemaining);
+            secondsRemaining -= elapsedSeconds;
+            secondsUntilNextTick -= elapsedSeconds;
+
+            while (secondsUntilNextTick <= 0.0 && !health.isDead()) {
+                health.takeDamage(damagePerTick);
+                secondsUntilNextTick += tickIntervalSeconds;
+            }
+
+            return secondsRemaining <= 0.0 || health.isDead();
         }
     }
 }

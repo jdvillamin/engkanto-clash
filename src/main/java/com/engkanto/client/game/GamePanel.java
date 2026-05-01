@@ -10,6 +10,7 @@ import java.util.List;
 import javax.swing.JPanel;
 
 import com.engkanto.client.game.character.PlayerAction;
+import com.engkanto.client.game.combat.AbilityUI;
 import com.engkanto.client.game.combat.HealthUI;
 import com.engkanto.client.game.entity.Player;
 import com.engkanto.client.game.entity.Projectile;
@@ -25,9 +26,12 @@ public final class GamePanel extends JPanel implements Runnable {
     private final TestDummy dummy;
     private final DebugRenderer debugRenderer;
     private final HealthUI healthUI;
+    private final AbilityUI abilityUI;
 
     private Thread gameThread;
     private boolean running;
+    private PlayerAction activeDirectAttack;
+    private boolean directAttackHitApplied;
 
     public GamePanel() {
         keyboardInput = new KeyboardInput();
@@ -36,10 +40,11 @@ public final class GamePanel extends JPanel implements Runnable {
                 GameConfig.SCREEN_WIDTH / 2.0 - Player.SIZE / 2.0,
                 getGroundPlatformTop() - Player.SIZE
         );
-        dummy = new TestDummy(350, getGroundPlatformTop() - TestDummy.HEIGHT);
+        dummy = new TestDummy(700, getGroundPlatformTop() - TestDummy.HEIGHT);
 
         debugRenderer = new DebugRenderer();
         healthUI = new HealthUI(player);
+        abilityUI = new AbilityUI(player);
 
         setPreferredSize(new Dimension(GameConfig.SCREEN_WIDTH, GameConfig.SCREEN_HEIGHT));
         setBackground(new Color(28, 36, 32));
@@ -96,29 +101,61 @@ public final class GamePanel extends JPanel implements Runnable {
     }
 
     private void resolvePlayerAttacks() {
-        if (player.isDead() || dummy.getHealthComponent().isDead()) return;
+        if (player.isDead() || dummy.getHealthComponent().isDead()) {
+            resetDirectAttackTracking();
+            return;
+        }
 
         PlayerAction action = player.getCurrentAction();
-        boolean isAttacking = action == PlayerAction.MOVE_1
-                        || action == PlayerAction.MOVE_2
-                        || action == PlayerAction.MOVE_3
-                        || action == PlayerAction.SPECIAL;
+        if (!isDirectAttack(action) || !player.isActionLocked()) {
+            resetDirectAttackTracking();
+            return;
+        }
 
-        if (!isAttacking || !player.isActionLocked()) return;
+        if (activeDirectAttack != action) {
+            activeDirectAttack = action;
+            directAttackHitApplied = false;
+        }
+        if (directAttackHitApplied) {
+            return;
+        }
+        if (!player.canActiveDirectAttackHit()) {
+            return;
+        }
 
-        boolean overlaps = player.getX() + Player.SIZE > dummy.getLeft()
-                        && player.getX()               < dummy.getRight();
+        boolean overlaps = dummy.overlapsHitbox(
+                player.getX(),
+                player.getY(),
+                player.getX() + Player.SIZE,
+                player.getY() + Player.SIZE
+        );
 
         if (overlaps) {
-            player.getActiveDamageComponent().hit(dummy.getHealthComponent());
+            directAttackHitApplied = player.applyActiveDirectAttack(dummy.getHealthComponent());
         }
+    }
+
+    private boolean isDirectAttack(PlayerAction action) {
+        return action == PlayerAction.MOVE_1
+                || action == PlayerAction.MOVE_2
+                || action == PlayerAction.MOVE_3
+                || action == PlayerAction.SPECIAL;
+    }
+
+    private void resetDirectAttackTracking() {
+        activeDirectAttack = null;
+        directAttackHitApplied = false;
     }
 
     private void resolveProjectileHits() {
         for (Projectile projectile : player.getActiveCharacterProjectiles()) {
             if (!projectile.isActive()) continue;
-            boolean overlaps = projectile.getX() + Projectile.DRAW_SIZE > dummy.getLeft()
-                            && projectile.getX()                         < dummy.getRight();
+            boolean overlaps = dummy.overlapsHitbox(
+                    projectile.getX(),
+                    projectile.getY(),
+                    projectile.getX() + projectile.getDrawSize(),
+                    projectile.getY() + projectile.getDrawSize()
+            );
             if (overlaps) {
                 projectile.hit(dummy.getHealthComponent());
             }
@@ -136,6 +173,7 @@ public final class GamePanel extends JPanel implements Runnable {
             player.draw(graphics2D);
             dummy.draw(graphics2D);
             healthUI.draw(graphics2D);
+            abilityUI.draw(graphics2D);
             debugRenderer.drawHud(graphics2D);
         } finally {
             graphics2D.dispose();
@@ -163,10 +201,13 @@ public final class GamePanel extends JPanel implements Runnable {
 
     private List<Platform> createPlatforms() {
         List<Platform> mapPlatforms = new ArrayList<>();
-        mapPlatforms.add(new Platform(0, 480, GameConfig.SCREEN_WIDTH, 96, Platform.Type.GROUND));
-        mapPlatforms.add(new Platform(96, 350, 184, 24, Platform.Type.FLOATING));
-        mapPlatforms.add(new Platform(520, 350, 184, 24, Platform.Type.FLOATING));
-        mapPlatforms.add(new Platform(308, 220, 184, 24, Platform.Type.FLOATING));
+        mapPlatforms.add(new Platform(0, GameConfig.SCREEN_HEIGHT - 96, GameConfig.SCREEN_WIDTH, 96, Platform.Type.GROUND));
+        mapPlatforms.add(new Platform(144, 492, 224, 24, Platform.Type.FLOATING));
+        mapPlatforms.add(new Platform(456, 392, 224, 24, Platform.Type.FLOATING));
+        mapPlatforms.add(new Platform(768, 492, 224, 24, Platform.Type.FLOATING));
+        mapPlatforms.add(new Platform(296, 292, 224, 24, Platform.Type.FLOATING));
+        mapPlatforms.add(new Platform(608, 292, 224, 24, Platform.Type.FLOATING));
+        mapPlatforms.add(new Platform(1000, 392, 224, 24, Platform.Type.FLOATING));
         return mapPlatforms;
     }
 

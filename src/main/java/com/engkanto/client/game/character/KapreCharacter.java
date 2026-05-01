@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import com.engkanto.client.game.combat.DamageComponent;
+import com.engkanto.client.game.combat.HealthComponent;
 import com.engkanto.client.game.entity.Player;
 import com.engkanto.client.game.entity.Projectile;
 import com.engkanto.client.render.AssetLoader;
@@ -16,6 +18,8 @@ public final class KapreCharacter extends SpriteCharacter {
     private static final int LOG_SOURCE_Y = 1035;
     private static final int LOG_SOURCE_SIZE = 150;
     private static final int THROW_LAST_FRAME_LEFT_TRIM = 42;
+    private static final double MOVE_1_DAMAGE = 15.0;
+    private static final double MOVE_2_COOLDOWN_SECONDS = 1.0;
 
     private final BufferedImage logImage;
     private final List<Projectile> projectiles = new ArrayList<>();
@@ -92,6 +96,27 @@ public final class KapreCharacter extends SpriteCharacter {
         return action == PlayerAction.MOVE_2
                 || action == PlayerAction.MOVE_3
                 || action == PlayerAction.SPECIAL;
+    }
+
+    @Override
+    public boolean canDirectAttackHit(PlayerAction action, int frameIndex) {
+        return action != PlayerAction.MOVE_3;
+    }
+
+    @Override
+    public boolean applyDirectAttack(PlayerAction action, HealthComponent target, DamageComponent damage) {
+        if (action == PlayerAction.MOVE_1) {
+            return damage.hit(target, MOVE_1_DAMAGE) > 0.0;
+        }
+        return damage.hit(target) > 0.0;
+    }
+
+    @Override
+    public double getCooldown(PlayerAction action, double defaultCooldownSeconds) {
+        if (action == PlayerAction.MOVE_2) {
+            return MOVE_2_COOLDOWN_SECONDS;
+        }
+        return defaultCooldownSeconds;
     }
 
     private void updateLogThrow(Player player) {

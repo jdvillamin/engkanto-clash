@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import com.engkanto.client.game.GameConfig;
 import com.engkanto.client.game.entity.Player;
 import com.engkanto.client.game.entity.Projectile;
 import com.engkanto.client.render.AssetLoader;
@@ -19,6 +18,10 @@ public final class EngkantoCharacter extends SpriteCharacter {
     private static final int MOVE_2_PROJECTILE_SOURCE_Y = 770;
     private static final int PROJECTILE_SOURCE_SIZE = 130;
     private static final int SPECIAL_PROJECTILE_DRAW_SIZE = 128;
+    private static final double MOVE_1_COOLDOWN_SECONDS = 0.20;
+    private static final double MOVE_1_PROJECTILE_DAMAGE = 10.0;
+    private static final double MOVE_2_PROJECTILE_DAMAGE = 20.0;
+    private static final double SPECIAL_PROJECTILE_DAMAGE = 25.0;
     private static final int VINE_DRAW_SIZE = 96;
     private static final double VINE_SECONDS = 0.55;
 
@@ -27,7 +30,6 @@ public final class EngkantoCharacter extends SpriteCharacter {
     private final BufferedImage vineImage;
     private final BufferedImage specialProjectileImage;
     private final List<Projectile> projectiles = new ArrayList<>();
-    private final List<LargeProjectile> largeProjectiles = new ArrayList<>();
     private final List<Vine> vines = new ArrayList<>();
     private boolean move1ProjectilePending;
     private boolean move2ProjectilePending;
@@ -76,7 +78,6 @@ public final class EngkantoCharacter extends SpriteCharacter {
         updateVine(player);
         updateSpecialProjectile(player);
         updateProjectiles(deltaSeconds);
-        updateLargeProjectiles(deltaSeconds);
         updateVines(deltaSeconds);
     }
 
@@ -86,9 +87,6 @@ public final class EngkantoCharacter extends SpriteCharacter {
             vine.draw(graphics);
         }
         for (Projectile projectile : projectiles) {
-            projectile.draw(graphics);
-        }
-        for (LargeProjectile projectile : largeProjectiles) {
             projectile.draw(graphics);
         }
     }
@@ -123,7 +121,24 @@ public final class EngkantoCharacter extends SpriteCharacter {
 
     @Override
     public boolean locksMovement(PlayerAction action) {
-        return action == PlayerAction.MOVE_3 || action == PlayerAction.SPECIAL;
+        return action == PlayerAction.MOVE_2
+                || action == PlayerAction.MOVE_3
+                || action == PlayerAction.SPECIAL;
+    }
+
+    @Override
+    public boolean canDirectAttackHit(PlayerAction action, int frameIndex) {
+        return action != PlayerAction.MOVE_1
+                && action != PlayerAction.MOVE_2
+                && action != PlayerAction.SPECIAL;
+    }
+
+    @Override
+    public double getCooldown(PlayerAction action, double defaultCooldownSeconds) {
+        if (action == PlayerAction.MOVE_1) {
+            return MOVE_1_COOLDOWN_SECONDS;
+        }
+        return defaultCooldownSeconds;
     }
 
     private void updateMove1Projectile(Player player) {
@@ -131,7 +146,7 @@ public final class EngkantoCharacter extends SpriteCharacter {
             return;
         }
 
-        addProjectile(move1ProjectileImage, player);
+        addProjectile(move1ProjectileImage, player, MOVE_1_PROJECTILE_DAMAGE);
         move1ProjectilePending = false;
     }
 
@@ -140,7 +155,7 @@ public final class EngkantoCharacter extends SpriteCharacter {
             return;
         }
 
-        addProjectile(move2ProjectileImage, player);
+        addProjectile(move2ProjectileImage, player, MOVE_2_PROJECTILE_DAMAGE);
         move2ProjectilePending = false;
     }
 
@@ -163,11 +178,11 @@ public final class EngkantoCharacter extends SpriteCharacter {
         specialProjectilePending = false;
     }
 
-    private void addProjectile(BufferedImage image, Player player) {
+    private void addProjectile(BufferedImage image, Player player, double damage) {
         int direction = player.isFacingLeft() ? -1 : 1;
         double projectileX = player.isFacingLeft() ? player.getX() - 24.0 : player.getX() + Player.SIZE - 24.0;
         double projectileY = player.getY() + Player.SIZE - 58.0;
-        projectiles.add(new Projectile(image, projectileX, projectileY, direction));
+        projectiles.add(new Projectile(image, projectileX, projectileY, direction, Projectile.DRAW_SIZE, damage));
     }
 
     private void addLargeProjectile(BufferedImage image, Player player) {
@@ -176,24 +191,20 @@ public final class EngkantoCharacter extends SpriteCharacter {
                 ? player.getX() - SPECIAL_PROJECTILE_DRAW_SIZE + 24.0
                 : player.getX() + Player.SIZE - 24.0;
         double projectileY = player.getY() + Player.SIZE - SPECIAL_PROJECTILE_DRAW_SIZE + 12.0;
-        largeProjectiles.add(new LargeProjectile(image, projectileX, projectileY, direction));
+        projectiles.add(new Projectile(
+                image,
+                projectileX,
+                projectileY,
+                direction,
+                SPECIAL_PROJECTILE_DRAW_SIZE,
+                SPECIAL_PROJECTILE_DAMAGE
+        ));
     }
 
     private void updateProjectiles(double deltaSeconds) {
         Iterator<Projectile> iterator = projectiles.iterator();
         while (iterator.hasNext()) {
             Projectile projectile = iterator.next();
-            projectile.update(deltaSeconds);
-            if (!projectile.isActive()) {
-                iterator.remove();
-            }
-        }
-    }
-
-    private void updateLargeProjectiles(double deltaSeconds) {
-        Iterator<LargeProjectile> iterator = largeProjectiles.iterator();
-        while (iterator.hasNext()) {
-            LargeProjectile projectile = iterator.next();
             projectile.update(deltaSeconds);
             if (!projectile.isActive()) {
                 iterator.remove();
@@ -241,54 +252,6 @@ public final class EngkantoCharacter extends SpriteCharacter {
 
         private boolean isActive() {
             return secondsRemaining > 0.0;
-        }
-    }
-
-    private static final class LargeProjectile {
-        private static final double SPEED_PIXELS_PER_SECOND = 360.0;
-
-        private final BufferedImage image;
-        private final int direction;
-        private double x;
-        private final double y;
-        private boolean active = true;
-
-        private LargeProjectile(BufferedImage image, double x, double y, int direction) {
-            this.image = image;
-            this.x = x;
-            this.y = y;
-            this.direction = direction;
-        }
-
-        private void update(double deltaSeconds) {
-            x += direction * SPEED_PIXELS_PER_SECOND * deltaSeconds;
-            active = x + SPECIAL_PROJECTILE_DRAW_SIZE >= 0.0 && x <= GameConfig.SCREEN_WIDTH;
-        }
-
-        private void draw(Graphics2D graphics) {
-            if (direction < 0) {
-                graphics.drawImage(
-                        image,
-                        (int) x + SPECIAL_PROJECTILE_DRAW_SIZE,
-                        (int) y,
-                        -SPECIAL_PROJECTILE_DRAW_SIZE,
-                        SPECIAL_PROJECTILE_DRAW_SIZE,
-                        null
-                );
-            } else {
-                graphics.drawImage(
-                        image,
-                        (int) x,
-                        (int) y,
-                        SPECIAL_PROJECTILE_DRAW_SIZE,
-                        SPECIAL_PROJECTILE_DRAW_SIZE,
-                        null
-                );
-            }
-        }
-
-        private boolean isActive() {
-            return active;
         }
     }
 

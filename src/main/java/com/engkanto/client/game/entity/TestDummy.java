@@ -79,6 +79,7 @@ public final class TestDummy {
     }
 
     public void update(double deltaSeconds) {
+        health.update(deltaSeconds);
         emitter.update(deltaSeconds);
 
         if (hitFlashRemaining > 0.0) {
@@ -114,6 +115,13 @@ public final class TestDummy {
     public double getTop()    { return originY; }
     public double getBottom() { return originY + HEIGHT; }
     public double getCenterX(){ return originX + WIDTH  / 2.0; }
+
+    public boolean overlapsHitbox(double left, double top, double right, double bottom) {
+        return right > getLeft()
+                && left < getRight()
+                && bottom > getTop()
+                && top < getBottom();
+    }
 
     private void drawPole(Graphics2D graphics) {
         int poleX     = (int) originX + WIDTH / 2 - 3;

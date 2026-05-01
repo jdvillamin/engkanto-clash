@@ -1,8 +1,12 @@
 package com.engkanto.client.game.character;
 
+import com.engkanto.client.game.combat.DamageComponent;
+import com.engkanto.client.game.combat.HealthComponent;
 import com.engkanto.client.game.entity.Player;
 
 public final class TikbalangCharacter extends SpriteCharacter {
+    private static final double MOVE_1_DAMAGE = 15.0;
+    private static final double MOVE_2_COOLDOWN_SECONDS = 1.0;
     private static final double DASH_VELOCITY_PIXELS_PER_SECOND = 540.0;
     private static final double DASH_DECAY_PER_SECOND = 1_800.0;
 
@@ -77,7 +81,30 @@ public final class TikbalangCharacter extends SpriteCharacter {
 
     @Override
     public boolean locksMovement(PlayerAction action) {
-        return action == PlayerAction.MOVE_3 || action == PlayerAction.SPECIAL;
+        return action == PlayerAction.MOVE_2
+                || action == PlayerAction.MOVE_3
+                || action == PlayerAction.SPECIAL;
+    }
+
+    @Override
+    public boolean canDirectAttackHit(PlayerAction action, int frameIndex) {
+        return action != PlayerAction.MOVE_3;
+    }
+
+    @Override
+    public boolean applyDirectAttack(PlayerAction action, HealthComponent target, DamageComponent damage) {
+        if (action == PlayerAction.MOVE_1) {
+            return damage.hit(target, MOVE_1_DAMAGE) > 0.0;
+        }
+        return damage.hit(target) > 0.0;
+    }
+
+    @Override
+    public double getCooldown(PlayerAction action, double defaultCooldownSeconds) {
+        if (action == PlayerAction.MOVE_2) {
+            return MOVE_2_COOLDOWN_SECONDS;
+        }
+        return defaultCooldownSeconds;
     }
 
     @Override

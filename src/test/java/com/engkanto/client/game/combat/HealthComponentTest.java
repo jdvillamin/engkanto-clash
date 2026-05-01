@@ -82,6 +82,23 @@ class HealthComponentTest {
         assertEquals(0, listener.deathEvents);
     }
 
+    @Test
+    void poisonDealsDamageOnEachTickUntilDurationEnds() {
+        HealthComponent health = new HealthComponent(100.0);
+        RecordingHealthListener listener = new RecordingHealthListener();
+        health.addListener(listener);
+
+        assertTrue(health.applyPoison(5.0, 0.5, 4.0));
+        for (int tick = 0; tick < 8; tick++) {
+            health.update(0.5);
+        }
+        health.update(0.5);
+
+        assertEquals(60.0, health.getCurrentHealth());
+        assertEquals(List.of(5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0), listener.damageEvents);
+        assertFalse(health.isDead());
+    }
+
     private static final class RecordingHealthListener implements HealthListener {
         private final List<Double> damageEvents = new ArrayList<>();
         private final List<Double> healEvents = new ArrayList<>();
