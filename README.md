@@ -5,9 +5,10 @@ implementation is a local playable combat prototype with character switching,
 sprite animations, platform movement, health and damage systems, projectiles,
 cooldowns, and a test dummy target.
 
-The repository still includes package roots for future client/server/common
-architecture. At this stage, the server entry point is only a placeholder and
-the active gameplay runs locally in the Swing client.
+Milestone 2 socket integration is now underway. The Swing client can connect to
+a Java TCP server, send keyboard input snapshots, and render the authoritative
+player snapshots broadcast by the server. If no server is available, the client
+falls back to the local single-player prototype.
 
 ## Current Features
 
@@ -21,6 +22,10 @@ the active gameplay runs locally in the Swing client.
 - one-hit-per-attack and one-hit-per-projectile damage guards
 - player health UI
 - `J`, `K`, `E`, and `L` cooldown key UI
+- Java TCP socket server for up to four multiplayer clients
+- JSON client input and server game-state messages
+- authoritative server movement, respawn, and basic player-vs-player hit
+  resolution
 - JUnit tests for core health behavior
 
 ## Technology Stack
@@ -40,22 +45,41 @@ Build the project:
 ./gradlew build
 ```
 
-Run a client:
+Run a local client:
 
 ```bash
 ./gradlew runClient
+```
+
+Run a multiplayer server:
+
+```bash
+./gradlew runServer
+```
+
+Then launch one or more clients. By default, clients try
+`127.0.0.1:50137` and fall back to local mode if the server is unavailable:
+
+```bash
+./gradlew runClient
+```
+
+Use explicit client options when connecting to another machine:
+
+```bash
+./gradlew runClient --args="--host=192.168.1.20 --port=50137"
+```
+
+Force local mode:
+
+```bash
+./gradlew runClient --args="--offline"
 ```
 
 Run tests:
 
 ```bash
 ./gradlew test
-```
-
-The placeholder server entry point can be launched with:
-
-```bash
-./gradlew runServer
 ```
 
 On Windows PowerShell, use `.\gradlew.bat` instead of `./gradlew`.
