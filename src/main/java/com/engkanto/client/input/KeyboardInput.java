@@ -3,6 +3,8 @@ package com.engkanto.client.input;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 
+import com.engkanto.common.model.PlayerInputSnapshot;
+
 public final class KeyboardInput extends KeyAdapter {
     private boolean upPressed;
     private boolean downPressed;
@@ -17,6 +19,7 @@ public final class KeyboardInput extends KeyAdapter {
     private boolean healPressed;
     private boolean glidePressed;
     private boolean switchCharacterPressed;
+    private boolean tabPressed;
     private boolean move1Requested;
     private boolean move2Requested;
     private boolean move3Requested;
@@ -72,6 +75,10 @@ public final class KeyboardInput extends KeyAdapter {
         return glidePressed;
     }
 
+    public boolean isTabPressed() {
+        return tabPressed;
+    }
+
     public boolean consumeMove1Requested() {
         boolean requested = move1Requested;
         move1Requested = false;
@@ -118,6 +125,21 @@ public final class KeyboardInput extends KeyAdapter {
         boolean requested = switchCharacterRequested;
         switchCharacterRequested = false;
         return requested;
+    }
+
+    public PlayerInputSnapshot consumeNetworkSnapshot(long sequence) {
+        PlayerInputSnapshot snapshot = new PlayerInputSnapshot(sequence);
+        snapshot.upPressed = upPressed;
+        snapshot.downPressed = downPressed;
+        snapshot.leftPressed = leftPressed;
+        snapshot.rightPressed = rightPressed;
+        snapshot.glidePressed = glidePressed;
+        snapshot.move1Requested = consumeMove1Requested();
+        snapshot.move2Requested = consumeMove2Requested();
+        snapshot.move3Requested = consumeMove3Requested();
+        snapshot.specialRequested = consumeSpecialRequested();
+        snapshot.switchCharacterRequested = consumeSwitchCharacterRequested();
+        return snapshot;
     }
 
     private void setKeyState(int keyCode, boolean pressed) {
@@ -182,6 +204,9 @@ public final class KeyboardInput extends KeyAdapter {
                 break;
             case KeyEvent.VK_SPACE:
                 glidePressed = pressed;
+                break;
+            case KeyEvent.VK_TAB:
+                tabPressed = pressed;
                 break;
             case KeyEvent.VK_P:
                 if (pressed && !switchCharacterPressed) {

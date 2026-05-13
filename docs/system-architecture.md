@@ -1,21 +1,23 @@
 # System Architecture
 
-This document describes the current codebase state. The repository still keeps
-client, server, and common package roots, but the implemented gameplay is
-currently a local Java Swing combat prototype. The server entry point is a
-placeholder and does not yet run an authoritative multiplayer game loop.
+This document describes the current codebase state. The project now has the
+first Milestone 2 socket integration: a Swing client can connect to a Java TCP
+server, send input snapshots, and render server-authoritative player snapshots.
+The original local combat prototype still remains available as a fallback when
+no server is running.
 
 ## Current Runtime Flow
 
 ```text
 ClientMain
+  -> optional NetworkClient TCP connection
   -> GameWindow
       -> GamePanel
           -> fixed update loop at 60 updates/second
           -> Java2D render pass
 ```
 
-The client owns the current playable state:
+In local mode, the client owns the playable state:
 
 - keyboard input
 - player movement and character switching
@@ -26,11 +28,45 @@ The client owns the current playable state:
 - projectile spawning, movement, collision, and one-shot hit behavior
 - health and ability cooldown UI
 
+In multiplayer mode:
+
+- `ClientMain` attempts to connect to `127.0.0.1:50137` unless `--offline` is
+  provided.
+- `KeyboardInput` converts held keys and one-shot ability requests into
+  `PlayerInputSnapshot` messages.
+- `NetworkClient` writes JSON input messages and keeps the newest
+  `GameStateSnapshot` from the server.
+- `GamePanel` draws the shared map plus every `PlayerSnapshot` received from the
+  server.
+- If the connection is unavailable at startup, the client starts in local mode.
+
+## Server Runtime Flow
+
+```text
+ServerMain
+  -> GameServer
+      -> ServerSocket accept loop
+      -> fixed update loop at 60 updates/second
+      -> broadcast GameStateSnapshot JSON to connected clients
+```
+
+The server currently owns:
+
+- player IDs and connection lifecycle
+- authoritative player positions, facing, character selection, animation action,
+  health, death, and respawn
+- movement, jumping, platform landing, and Aswang glide
+- basic player-vs-player hit resolution for direct and ranged abilities
+
 ## Important Packages
 
 ```text
 com.engkanto.client
 Desktop entry point and Swing window.
+
+com.engkanto.client.net
+TCP client connection, JSON message writing, and background server-state
+reading.
 
 com.engkanto.client.input
 Keyboard state and one-shot action requests.
@@ -55,10 +91,14 @@ com.engkanto.client.render
 Sprite and asset loading helpers plus debug HUD rendering.
 
 com.engkanto.server
-Placeholder server entry point.
+Server entry point.
+
+com.engkanto.server.game
+Authoritative socket server loop and server-side player simulation.
 
 com.engkanto.common
-Reserved for future shared model/network code.
+Shared snapshot models and JSON message DTOs used by both the client and
+server.
 ```
 
 ## Combat Flow
@@ -93,6 +133,20 @@ The current UI is drawn directly in Java2D:
 - `TestDummy` draws its own label, health bar, hit flash, death label, and
   damage numbers.
 
+## Multiplayer Message Flow
+
+```text
+Client -> Server:
+  ClientMessage { type: "input", input: PlayerInputSnapshot }
+
+Server -> Client:
+  ServerMessage { type: "welcome", playerId: number }
+  ServerMessage { type: "state", state: GameStateSnapshot }
+```
+
+The network uses newline-delimited JSON over TCP sockets. Gson handles the
+message serialization.
+
 ## Testing
 
 JUnit coverage currently focuses on `HealthComponent`, including:
@@ -105,8 +159,7 @@ JUnit coverage currently focuses on `HealthComponent`, including:
 
 ## Future Architecture Work
 
-The original project target includes networked multiplayer with an
-authoritative server. That is not implemented yet. Future work should move
-game-state authority, player synchronization, hit resolution, and chat into the
-server/common layers while keeping the Swing client focused on input and
-rendering.
+The current multiplayer pass focuses on player synchronization and basic PvP
+authority. Future work should expand the server model to cover exact
+per-character projectile behavior, poison ticking, cooldown UI snapshots, game
+lobbies, and in-game chat display.
