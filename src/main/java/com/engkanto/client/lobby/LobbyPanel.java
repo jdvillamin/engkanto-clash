@@ -7,9 +7,12 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.util.List;
 
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
@@ -47,6 +50,13 @@ public final class LobbyPanel extends JPanel implements Runnable {
     private static final int BTN_X = (GameConfig.SCREEN_WIDTH - BTN_WIDTH) / 2;
     private static final int BTN_Y = 570;
 
+    private static final int CHAT_X = 20;
+    private static final int CHAT_Y = 400;
+    private static final int CHAT_WIDTH = 340;
+    private static final int CHAT_HEIGHT = 200;
+    private static final int CHAT_INPUT_HEIGHT = 30;
+    private static final int CHAT_MAX_MESSAGES = 8;
+
     private static final Color TITLE_COLOR = new Color(245, 232, 184);
     private static final Color CARD_BORDER = new Color(74, 52, 30);
     private static final Color CARD_SELECTED_BORDER = new Color(218, 186, 104);
@@ -60,6 +70,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
     private final NetworkClient networkClient;
     private final Runnable onGameStart;
     private final BufferedImage[] characterPortraits;
+    private final StringBuilder chatInput = new StringBuilder();
 
     private int selectedCharacterIndex;
     private boolean localReady;
@@ -89,6 +100,13 @@ public final class LobbyPanel extends JPanel implements Runnable {
             @Override
             public void mouseMoved(MouseEvent e) {
                 updateHover(e.getX(), e.getY());
+            }
+        });
+
+        addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                handleChatKey(e);
             }
         });
     }
@@ -138,6 +156,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
             drawCharacterCards(g);
             drawPlayerSlots(g);
             drawReadyButton(g);
+            drawChat(g);
             drawCountdown(g);
 
             if (!networkClient.isConnected()) {
@@ -188,6 +207,24 @@ public final class LobbyPanel extends JPanel implements Runnable {
         if (mx >= BTN_X && mx <= BTN_X + BTN_WIDTH
                 && my >= BTN_Y && my <= BTN_Y + BTN_HEIGHT) {
             hoveringReadyButton = true;
+        }
+    }
+
+    private void handleChatKey(KeyEvent e) {
+        if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+            String text = chatInput.toString().trim();
+            if (!text.isEmpty()) {
+                networkClient.sendChat(text);
+                chatInput.setLength(0);
+            }
+        } else if (e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+            if (chatInput.length() > 0) {
+                chatInput.deleteCharAt(chatInput.length() - 1);
+            }
+        } else if (e.getKeyChar() != KeyEvent.CHAR_UNDEFINED && !e.isActionKey()) {
+            if (chatInput.length() < 80) {
+                chatInput.append(e.getKeyChar());
+            }
         }
     }
 
@@ -323,6 +360,36 @@ public final class LobbyPanel extends JPanel implements Runnable {
         int textX = BTN_X + (BTN_WIDTH - fm.stringWidth(btnText)) / 2;
         int textY = BTN_Y + (BTN_HEIGHT + fm.getAscent() - fm.getDescent()) / 2;
         g.drawString(btnText, textX, textY);
+    }
+
+    private void drawChat(Graphics2D g) {
+        g.setColor(new Color(0, 0, 0, 140));
+        g.fillRoundRect(CHAT_X, CHAT_Y, CHAT_WIDTH, CHAT_HEIGHT, 8, 8);
+        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+        g.setColor(new Color(180, 180, 180));
+        g.drawString("CHAT", CHAT_X + 8, CHAT_Y - 4);
+
+        List<NetworkClient.ChatMessage> messages = networkClient.getChatMessages();
+        int start = Math.max(0, messages.size() - CHAT_MAX_MESSAGES);
+        g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        int lineHeight = 22;
+        int textY = CHAT_Y + 18;
+        for (int i = start; i < messages.size(); i++) {
+            NetworkClient.ChatMessage msg = messages.get(i);
+            boolean isLocal = msg.senderId == networkClient.getLocalPlayerId();
+            g.setColor(isLocal ? TITLE_COLOR : Color.WHITE);
+            g.drawString(msg.toString(), CHAT_X + 8, textY);
+            textY += lineHeight;
+        }
+
+        int inputY = CHAT_Y + CHAT_HEIGHT + 4;
+        g.setColor(new Color(0, 0, 0, 160));
+        g.fillRoundRect(CHAT_X, inputY, CHAT_WIDTH, CHAT_INPUT_HEIGHT, 6, 6);
+        g.setColor(CARD_SELECTED_BORDER);
+        g.drawRoundRect(CHAT_X, inputY, CHAT_WIDTH, CHAT_INPUT_HEIGHT, 6, 6);
+        g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
+        g.setColor(Color.WHITE);
+        g.drawString(chatInput.toString() + "|", CHAT_X + 8, inputY + 20);
     }
 
     private void drawCountdown(Graphics2D g) {

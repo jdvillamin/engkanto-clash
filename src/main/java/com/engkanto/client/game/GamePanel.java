@@ -1,13 +1,18 @@
 package com.engkanto.client.game;
 
+import java.awt.AWTEvent;
+import java.awt.AlphaComposite;
 import java.awt.Color;
+import java.awt.Composite;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.event.KeyEvent;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import javax.swing.JPanel;
@@ -22,13 +27,20 @@ import com.engkanto.client.game.entity.TestDummy;
 import com.engkanto.client.game.world.Platform;
 import com.engkanto.client.input.KeyboardInput;
 import com.engkanto.client.net.NetworkClient;
+import com.engkanto.client.render.DebugRenderer;
 import com.engkanto.common.model.GameStateSnapshot;
 import com.engkanto.common.model.PlayerSnapshot;
-import com.engkanto.client.render.DebugRenderer;
-
-import java.util.Comparator;
 
 public final class GamePanel extends JPanel implements Runnable {
+    private static final int CHAT_X = 16;
+    private static final int CHAT_Y = 420;
+    private static final int CHAT_WIDTH = 320;
+    private static final int CHAT_HEIGHT = 160;
+    private static final int CHAT_INPUT_HEIGHT = 28;
+    private static final int CHAT_MAX_MESSAGES = 6;
+    private static final double CHAT_VISIBLE_SECONDS = 3.0;
+    private static final Color CHAT_GOLD = new Color(245, 232, 184);
+
     private final KeyboardInput keyboardInput;
     private final List<Platform> platforms;
     private final Player player;
@@ -38,12 +50,16 @@ public final class GamePanel extends JPanel implements Runnable {
     private final AbilityUI abilityUI;
     private final NetworkClient networkClient;
     private final RemotePlayerRenderer remotePlayerRenderer;
+    private final StringBuilder chatInput = new StringBuilder();
 
     private Thread gameThread;
     private boolean running;
     private PlayerAction activeDirectAttack;
     private boolean directAttackHitApplied;
     private long inputSequence;
+    private boolean chatFocused;
+    private double chatVisibleTimer;
+    private int lastSeenMessageCount;
 
     public GamePanel() {
         this(null);
@@ -69,7 +85,7 @@ public final class GamePanel extends JPanel implements Runnable {
         setDoubleBuffered(true);
         setFocusable(true);
         setFocusTraversalKeysEnabled(false);
-        addKeyListener(keyboardInput);
+        enableEvents(AWTEvent.KEY_EVENT_MASK);
     }
 
     public synchronized void start() {
@@ -81,6 +97,17 @@ public final class GamePanel extends JPanel implements Runnable {
         gameThread = new Thread(this, "engkanto-game-loop");
         gameThread.start();
         requestFocusInWindow();
+    }
+
+    @Override
+    protected void processKeyEvent(KeyEvent e) {
+        if (e.getID() == KeyEvent.KEY_PRESSED) {
+            handleChatKey(e);
+        }
+        if (!chatFocused) {
+            keyboardInput.dispatch(e);
+        }
+        super.processKeyEvent(e);
     }
 
     @Override
@@ -110,6 +137,7 @@ public final class GamePanel extends JPanel implements Runnable {
         if (isNetworkMode()) {
             networkClient.sendInput(keyboardInput.consumeNetworkSnapshot(++inputSequence));
             remotePlayerRenderer.update(deltaSeconds, networkClient.getLatestState());
+            tickChatVisibility(deltaSeconds);
             return;
         }
 
@@ -123,6 +151,51 @@ public final class GamePanel extends JPanel implements Runnable {
         dummy.update(deltaSeconds);
         resolvePlayerAttacks();
         resolveProjectileHits();
+    }
+
+    private void tickChatVisibility(double deltaSeconds) {
+        if (chatVisibleTimer > 0.0) {
+            chatVisibleTimer = Math.max(0.0, chatVisibleTimer - deltaSeconds);
+        }
+        List<NetworkClient.ChatMessage> messages = networkClient.getChatMessages();
+        if (messages.size() > lastSeenMessageCount) {
+            lastSeenMessageCount = messages.size();
+            chatVisibleTimer = CHAT_VISIBLE_SECONDS;
+        }
+    }
+
+    private void handleChatKey(KeyEvent e) {
+        if (!isNetworkMode()) return;
+
+        if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+            if (chatFocused) {
+                String text = chatInput.toString().trim();
+                if (!text.isEmpty()) {
+                    networkClient.sendChat(text);
+                    chatInput.setLength(0);
+                }
+                chatFocused = false;
+            } else {
+                chatFocused = true;
+                chatVisibleTimer = CHAT_VISIBLE_SECONDS;
+            }
+            return;
+        }
+
+        if (!chatFocused) return;
+
+        if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+            chatFocused = false;
+            chatInput.setLength(0);
+        } else if (e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+            if (chatInput.length() > 0) {
+                chatInput.deleteCharAt(chatInput.length() - 1);
+            }
+        } else if (e.getKeyChar() != KeyEvent.CHAR_UNDEFINED && !e.isActionKey()) {
+            if (chatInput.length() < 80) {
+                chatInput.append(e.getKeyChar());
+            }
+        }
     }
 
     private void resolvePlayerAttacks() {
@@ -205,6 +278,7 @@ public final class GamePanel extends JPanel implements Runnable {
                     drawNetworkAbilityUI(graphics2D, localPlayer);
                 }
                 drawTabHint(graphics2D);
+                drawChat(graphics2D);
                 if (keyboardInput.isTabPressed() && state != null) {
                     drawLeaderboard(graphics2D, state);
                 }
@@ -218,6 +292,50 @@ public final class GamePanel extends JPanel implements Runnable {
         } finally {
             graphics2D.dispose();
         }
+    }
+
+    private void drawChat(Graphics2D g) {
+        boolean visible = chatFocused || chatVisibleTimer > 0.0;
+        if (!visible) return;
+
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        float alpha = chatFocused ? 1.0f : (float) Math.min(1.0, chatVisibleTimer);
+        Composite original = g.getComposite();
+        g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
+
+        g.setColor(new Color(0, 0, 0, 130));
+        g.fillRoundRect(CHAT_X, CHAT_Y, CHAT_WIDTH, CHAT_HEIGHT, 8, 8);
+
+        List<NetworkClient.ChatMessage> messages = networkClient.getChatMessages();
+        int start = Math.max(0, messages.size() - CHAT_MAX_MESSAGES);
+        g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        int lineHeight = 22;
+        int textY = CHAT_Y + 18;
+        for (int i = start; i < messages.size(); i++) {
+            NetworkClient.ChatMessage msg = messages.get(i);
+            boolean isLocal = msg.senderId == networkClient.getLocalPlayerId();
+            g.setColor(isLocal ? CHAT_GOLD : Color.WHITE);
+            g.drawString(msg.toString(), CHAT_X + 8, textY);
+            textY += lineHeight;
+        }
+
+        int inputY = CHAT_Y + CHAT_HEIGHT + 4;
+        g.setColor(new Color(0, 0, 0, chatFocused ? 200 : 140));
+        g.fillRoundRect(CHAT_X, inputY, CHAT_WIDTH, CHAT_INPUT_HEIGHT, 6, 6);
+        g.setColor(chatFocused ? CHAT_GOLD : new Color(120, 120, 120));
+        g.drawRoundRect(CHAT_X, inputY, CHAT_WIDTH, CHAT_INPUT_HEIGHT, 6, 6);
+
+        g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        if (chatFocused) {
+            g.setColor(Color.WHITE);
+            g.drawString(chatInput.toString() + "|", CHAT_X + 8, inputY + 18);
+        } else {
+            g.setColor(new Color(140, 140, 140));
+            g.drawString("Press Enter to chat", CHAT_X + 8, inputY + 18);
+        }
+
+        g.setComposite(original);
     }
 
     private boolean isNetworkMode() {
@@ -421,7 +539,7 @@ public final class GamePanel extends JPanel implements Runnable {
             graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
             graphics.drawString(p.characterName, colChar, rowY);
             graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
-            graphics.setColor(isLocal ? new Color(83, 218, 112) : new Color(83, 218, 112));
+            graphics.setColor(new Color(83, 218, 112));
             graphics.drawString(String.valueOf(p.kills), colKills, rowY);
         }
 
