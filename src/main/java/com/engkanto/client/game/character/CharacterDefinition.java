@@ -36,6 +36,10 @@ public interface CharacterDefinition {
         return Double.POSITIVE_INFINITY;
     }
 
+    default int getAscendingJumpFrame(Player player, boolean glideHeld) {
+        return 1;
+    }
+
     default int getFallingJumpFrame(Player player, boolean glideHeld) {
         return 2;
     }
@@ -76,6 +80,10 @@ public interface CharacterDefinition {
     }
 
     default List<Projectile> getProjectiles() {
+        return java.util.Collections.emptyList();
+    }
+
+    default List<EngkantoCharacter.Vine> getVines() {
         return java.util.Collections.emptyList();
     }
 }

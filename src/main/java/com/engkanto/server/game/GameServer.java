@@ -150,6 +150,8 @@ public final class GameServer {
                 player.update(deltaSeconds, platforms);
             }
             resolvePlayerCombat();
+            resolveVineRoots();
+            resolvePoisons(deltaSeconds);
             updateProjectiles(deltaSeconds);
             respawnReadyPlayers();
             tick++;
@@ -283,10 +285,45 @@ public final class GameServer {
                         if (killed) {
                             attacker.addKill();
                         }
+                        if (attacker.isPendingPoison() && !target.isDead()) {
+                            target.applyPoison(attacker.getId());
+                        }
                     }
                 }
                 attacker.markAttackResolved();
             }
+        }
+    }
+
+    private void resolvePoisons(double deltaSeconds) {
+        for (ServerPlayer player : players.values()) {
+            if (player.isDead()) {
+                continue;
+            }
+            int killerOwnerId = player.tickPoisons(deltaSeconds);
+            if (killerOwnerId >= 0) {
+                ServerPlayer killer = players.get(killerOwnerId);
+                if (killer != null) {
+                    killer.addKill();
+                }
+            }
+        }
+    }
+
+    private void resolveVineRoots() {
+        for (ServerPlayer caster : players.values()) {
+            if (!caster.hasVineRootReady()) {
+                continue;
+            }
+            for (ServerPlayer target : players.values()) {
+                if (target == caster || target.isDead() || target.isInvulnerable()) {
+                    continue;
+                }
+                if (caster.overlapsVineRoot(target)) {
+                    target.applyRoot(caster.getVineRootDuration());
+                }
+            }
+            caster.markVineRootResolved();
         }
     }
 

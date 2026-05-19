@@ -12,6 +12,8 @@ import java.util.List;
 
 import javax.swing.JPanel;
 
+import com.engkanto.client.audio.HitSoundEffect;
+import com.engkanto.client.game.character.EngkantoCharacter;
 import com.engkanto.client.game.character.PlayerAction;
 import com.engkanto.client.game.combat.AbilityUI;
 import com.engkanto.client.game.combat.HealthUI;
@@ -123,6 +125,7 @@ public final class GamePanel extends JPanel implements Runnable {
         dummy.update(deltaSeconds);
         resolvePlayerAttacks();
         resolveProjectileHits();
+        resolveVineRoots();
     }
 
     private void resolvePlayerAttacks() {
@@ -157,6 +160,9 @@ public final class GamePanel extends JPanel implements Runnable {
 
         if (overlaps) {
             directAttackHitApplied = player.applyActiveDirectAttack(dummy.getHealthComponent());
+            if (directAttackHitApplied) {
+                HitSoundEffect.getInstance().play();
+            }
         }
     }
 
@@ -172,6 +178,20 @@ public final class GamePanel extends JPanel implements Runnable {
         directAttackHitApplied = false;
     }
 
+    private void resolveVineRoots() {
+        for (EngkantoCharacter.Vine vine : player.getActiveCharacterVines()) {
+            if (!vine.isActive() || !vine.canRoot()) {
+                continue;
+            }
+            if (dummy.getHealthComponent().isDead()) {
+                continue;
+            }
+            if (vine.overlaps(dummy.getX(), dummy.getY(), TestDummy.HEIGHT)) {
+                vine.markRootApplied();
+            }
+        }
+    }
+
     private void resolveProjectileHits() {
         for (Projectile projectile : player.getActiveCharacterProjectiles()) {
             if (!projectile.isActive()) continue;
@@ -183,6 +203,7 @@ public final class GamePanel extends JPanel implements Runnable {
             );
             if (overlaps) {
                 projectile.hit(dummy.getHealthComponent());
+                HitSoundEffect.getInstance().play();
             }
         }
     }
