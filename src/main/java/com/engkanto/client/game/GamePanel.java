@@ -137,8 +137,11 @@ public final class GamePanel extends JPanel implements Runnable {
 
     private void update(double deltaSeconds) {
         if (isNetworkMode()) {
-            networkClient.sendInput(keyboardInput.consumeNetworkSnapshot(++inputSequence));
-            remotePlayerRenderer.update(deltaSeconds, networkClient.getLatestState());
+            GameStateSnapshot state = networkClient.getLatestState();
+            if (state == null || !state.gameOver) {
+                networkClient.sendInput(keyboardInput.consumeNetworkSnapshot(++inputSequence));
+            }
+            remotePlayerRenderer.update(deltaSeconds, state);
             tickChatVisibility(deltaSeconds);
             return;
         }
@@ -293,15 +296,21 @@ public final class GamePanel extends JPanel implements Runnable {
                 GameStateSnapshot state = networkClient.getLatestState();
                 drawNetworkPlayers(graphics2D, state);
                 remotePlayerRenderer.drawEffects(graphics2D);
+                if (state != null) {
+                    drawNetworkTimer(graphics2D, state);
+                }
                 PlayerSnapshot localPlayer = findLocalPlayer(state);
                 if (localPlayer != null) {
                     drawNetworkHud(graphics2D, localPlayer);
                     drawNetworkAbilityUI(graphics2D, localPlayer);
                 }
-                drawTabHint(graphics2D);
-                drawChat(graphics2D);
-                if (keyboardInput.isTabPressed() && state != null) {
+                if (state != null && state.gameOver) {
+                    drawResultsOverlay(graphics2D, state);
+                } else if (state != null && keyboardInput.isTabPressed()) {
                     drawLeaderboard(graphics2D, state);
+                } else {
+                    drawTabHint(graphics2D);
+                    drawChat(graphics2D);
                 }
             } else {
                 player.draw(graphics2D);
@@ -387,6 +396,28 @@ public final class GamePanel extends JPanel implements Runnable {
             }
         }
         return null;
+    }
+
+    private void drawNetworkTimer(Graphics2D graphics, GameStateSnapshot state) {
+        String timeText = formatTimer(state.secondsRemaining);
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 24));
+        FontMetrics fm = graphics.getFontMetrics();
+        int boxW = fm.stringWidth(timeText) + 42;
+        int boxH = 38;
+        int boxX = (GameConfig.SCREEN_WIDTH - boxW) / 2;
+        int boxY = 12;
+
+        Object prevAA = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        graphics.setColor(new Color(0, 0, 0, 150));
+        graphics.fillRoundRect(boxX, boxY, boxW, boxH, 10, 10);
+        graphics.setColor(state.secondsRemaining <= 10.0 ? new Color(255, 120, 100) : new Color(245, 232, 184));
+        graphics.drawString(timeText, boxX + (boxW - fm.stringWidth(timeText)) / 2, boxY + 27);
+
+        if (prevAA != null) {
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, prevAA);
+        }
     }
 
     private void drawNetworkHud(Graphics2D graphics, PlayerSnapshot localPlayer) {
@@ -567,6 +598,105 @@ public final class GamePanel extends JPanel implements Runnable {
         if (prevAA != null) {
             graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, prevAA);
         }
+    }
+
+    private void drawResultsOverlay(Graphics2D graphics, GameStateSnapshot state) {
+        Object prevAA = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        graphics.setColor(new Color(0, 0, 0, 190));
+        graphics.fillRect(0, 0, GameConfig.SCREEN_WIDTH, GameConfig.SCREEN_HEIGHT);
+
+        List<PlayerSnapshot> sorted = sortedByKills(state);
+        int panelW = 560;
+        int headerH = 92;
+        int rowH = 42;
+        int panelH = headerH + sorted.size() * rowH + 34;
+        int panelX = (GameConfig.SCREEN_WIDTH - panelW) / 2;
+        int panelY = (GameConfig.SCREEN_HEIGHT - panelH) / 2;
+
+        graphics.setColor(new Color(30, 38, 34, 245));
+        graphics.fillRoundRect(panelX, panelY, panelW, panelH, 18, 18);
+        graphics.setColor(new Color(218, 186, 104));
+        graphics.drawRoundRect(panelX, panelY, panelW, panelH, 18, 18);
+        graphics.drawRoundRect(panelX + 1, panelY + 1, panelW - 2, panelH - 2, 16, 16);
+
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 30));
+        graphics.setColor(new Color(245, 232, 184));
+        FontMetrics titleFm = graphics.getFontMetrics();
+        String title = "RESULTS";
+        graphics.drawString(title, panelX + (panelW - titleFm.stringWidth(title)) / 2, panelY + 42);
+
+        String firstText = sorted.isEmpty() ? "No players" : "1st: Player " + sorted.get(0).id;
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+        FontMetrics firstFm = graphics.getFontMetrics();
+        graphics.setColor(Color.WHITE);
+        graphics.drawString(firstText, panelX + (panelW - firstFm.stringWidth(firstText)) / 2, panelY + 70);
+
+        int colRank = panelX + 30;
+        int colName = panelX + 86;
+        int colChar = panelX + 260;
+        int colKills = panelX + 470;
+        int rowTop = panelY + headerH;
+
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        graphics.setColor(new Color(180, 180, 180));
+        graphics.drawString("RANK", colRank, rowTop - 10);
+        graphics.drawString("PLAYER", colName, rowTop - 10);
+        graphics.drawString("CHARACTER", colChar, rowTop - 10);
+        graphics.drawString("KILLS", colKills, rowTop - 10);
+
+        int localId = networkClient.getLocalPlayerId();
+        for (int i = 0; i < sorted.size(); i++) {
+            PlayerSnapshot player = sorted.get(i);
+            int y = rowTop + i * rowH;
+            boolean isLocal = player.id == localId;
+
+            if (i == 0) {
+                graphics.setColor(new Color(218, 186, 104, 55));
+                graphics.fillRoundRect(panelX + 14, y - 6, panelW - 28, rowH - 4, 8, 8);
+            } else if (isLocal) {
+                graphics.setColor(new Color(145, 231, 255, 35));
+                graphics.fillRoundRect(panelX + 14, y - 6, panelW - 28, rowH - 4, 8, 8);
+            }
+
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 15));
+            graphics.setColor(i == 0 ? new Color(245, 232, 184) : (isLocal ? new Color(145, 231, 255) : Color.WHITE));
+            graphics.drawString(rankLabel(i + 1), colRank, y + 20);
+            graphics.drawString("Player " + player.id, colName, y + 20);
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 15));
+            graphics.drawString(player.characterName, colChar, y + 20);
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
+            graphics.setColor(new Color(83, 218, 112));
+            graphics.drawString(String.valueOf(player.kills), colKills, y + 20);
+        }
+
+        if (prevAA != null) {
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, prevAA);
+        }
+    }
+
+    private List<PlayerSnapshot> sortedByKills(GameStateSnapshot state) {
+        List<PlayerSnapshot> sorted = new ArrayList<>(state.players);
+        sorted.sort(Comparator.comparingInt((PlayerSnapshot p) -> p.kills).reversed()
+                .thenComparingInt(p -> p.id));
+        return sorted;
+    }
+
+    private String rankLabel(int rank) {
+        return switch (rank) {
+            case 1 -> "1st";
+            case 2 -> "2nd";
+            case 3 -> "3rd";
+            default -> rank + "th";
+        };
+    }
+
+    private String formatTimer(double secondsRemaining) {
+        int totalSeconds = (int) Math.ceil(Math.max(0.0, secondsRemaining));
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+        return String.format("%d:%02d", minutes, seconds);
     }
 
     private void drawWorld(Graphics2D graphics) {

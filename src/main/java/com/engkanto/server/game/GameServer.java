@@ -27,6 +27,7 @@ import com.google.gson.JsonSyntaxException;
 public final class GameServer {
     private static final double TARGET_UPDATES_PER_SECOND = 60.0;
     private static final double COUNTDOWN_SECONDS = 10.0;
+    private static final double GAME_DURATION_SECONDS = 180.0;
     private static final int SCREEN_HEIGHT = 704;
 
     private static final double[][] SPAWN_CANDIDATES = {
@@ -35,7 +36,7 @@ public final class GameServer {
             {408, 196}, {720, 196}, {1112, 296}
     };
 
-    private enum Phase { LOBBY, IN_GAME }
+    private enum Phase { LOBBY, IN_GAME, GAME_OVER }
 
     private final Gson gson = new Gson();
     private final Object lock = new Object();
@@ -52,6 +53,7 @@ public final class GameServer {
     private Phase phase = Phase.LOBBY;
     private boolean countdownActive;
     private double countdownRemaining;
+    private double gameSecondsRemaining = GAME_DURATION_SECONDS;
 
     public GameServer(int port) {
         this.port = port;
@@ -83,7 +85,7 @@ public final class GameServer {
 
     private void handleAcceptedClient(Socket socket) throws IOException {
         synchronized (lock) {
-            if (phase == Phase.IN_GAME) {
+            if (phase != Phase.LOBBY) {
                 PrintWriter writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
                 writer.println(gson.toJson(ServerMessage.disconnect("Game already in progress")));
                 socket.close();
@@ -142,10 +144,15 @@ public final class GameServer {
             updateLobby(deltaSeconds);
             return;
         }
+        if (phase == Phase.GAME_OVER) {
+            broadcastGameState();
+            return;
+        }
 
         List<ClientConnection> connections;
         GameStateSnapshot snapshot;
         synchronized (lock) {
+            gameSecondsRemaining = Math.max(0.0, gameSecondsRemaining - deltaSeconds);
             for (ServerPlayer player : players.values()) {
                 player.update(deltaSeconds, platforms);
             }
@@ -154,6 +161,10 @@ public final class GameServer {
             resolvePoisons(deltaSeconds);
             updateProjectiles(deltaSeconds);
             respawnReadyPlayers();
+            if (gameSecondsRemaining <= 0.0) {
+                phase = Phase.GAME_OVER;
+                System.out.println("Game over!");
+            }
             tick++;
             snapshot = createSnapshot();
             connections = new ArrayList<>(clients.values());
@@ -186,6 +197,7 @@ public final class GameServer {
                     }
                 }
                 phase = Phase.IN_GAME;
+                gameSecondsRemaining = GAME_DURATION_SECONDS;
                 countdownActive = false;
                 connections = new ArrayList<>(clients.values());
             } else if (currentSecond != previousSecond) {
@@ -205,6 +217,19 @@ public final class GameServer {
             for (ClientConnection connection : connections) {
                 connection.send(message);
             }
+        }
+    }
+
+    private void broadcastGameState() {
+        List<ClientConnection> connections;
+        GameStateSnapshot snapshot;
+        synchronized (lock) {
+            snapshot = createSnapshot();
+            connections = new ArrayList<>(clients.values());
+        }
+        ServerMessage message = ServerMessage.gameState(snapshot);
+        for (ClientConnection connection : connections) {
+            connection.send(message);
         }
     }
 
@@ -394,7 +419,7 @@ public final class GameServer {
         for (ServerPlayer player : players.values()) {
             snapshots.add(player.toSnapshot());
         }
-        return new GameStateSnapshot(tick, snapshots);
+        return new GameStateSnapshot(tick, snapshots, gameSecondsRemaining, phase == Phase.GAME_OVER);
     }
 
     private void removeClient(int playerId) {
@@ -493,7 +518,7 @@ public final class GameServer {
                     broadcastLobbyState();
                 } else if ("input".equals(message.type) && message.input != null) {
                     synchronized (lock) {
-                        ServerPlayer player = players.get(playerId);
+                        ServerPlayer player = phase == Phase.IN_GAME ? players.get(playerId) : null;
                         if (player != null) {
                             player.setInput(message.input);
                         }
