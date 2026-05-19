@@ -16,6 +16,7 @@ final class ServerPlayer {
     private static final double GRAVITY_PIXELS_PER_SECOND = 1_200.0;
     private static final double RESPAWN_SECONDS = 1.0;
     private static final double ATTACK_IMPACT_SECONDS = 0.18;
+    private static final double INVULNERABILITY_SECONDS = 3.0;
     private static final double DASH_VELOCITY = 540.0;
     private static final double DASH_DECAY = 1_800.0;
 
@@ -48,6 +49,7 @@ final class ServerPlayer {
     private double dashVelocity;
     private int committedDashDirection;
     private boolean specialDashPending;
+    private double invulnerabilityRemaining;
     private int kills;
 
     ServerPlayer(int id, double x, double y) {
@@ -77,6 +79,7 @@ final class ServerPlayer {
             return;
         }
 
+        tickInvulnerability(deltaSeconds);
         tickCooldowns(deltaSeconds);
         switchCharacterIfRequested();
 
@@ -124,7 +127,7 @@ final class ServerPlayer {
     }
 
     boolean canHit(ServerPlayer target) {
-        if (target == this || target.isDead()) {
+        if (target == this || target.isDead() || target.isInvulnerable()) {
             return false;
         }
         if (pendingRangedAttack) {
@@ -142,7 +145,7 @@ final class ServerPlayer {
     }
 
     boolean takeDamage(double damage) {
-        if (damage <= 0.0 || isDead()) {
+        if (damage <= 0.0 || isDead() || isInvulnerable()) {
             return false;
         }
         health = Math.max(0.0, health - damage);
@@ -187,6 +190,7 @@ final class ServerPlayer {
         snapshot.specialCooldownRemaining = specialCooldownRemaining;
         snapshot.specialCooldownDuration = getCooldown("SPECIAL");
         snapshot.kills = kills;
+        snapshot.invulnerable = isInvulnerable();
         return snapshot;
     }
 
@@ -196,10 +200,30 @@ final class ServerPlayer {
         committedDashDirection = 0;
         specialDashPending = false;
         respawnTimerRemaining -= deltaSeconds;
-        if (respawnTimerRemaining <= 0.0) {
-            health = MAX_HEALTH;
-            actionLocked = false;
-            play("IDLE");
+    }
+
+    boolean isReadyToRespawn() {
+        return isDead() && respawnTimerRemaining <= 0.0;
+    }
+
+    void respawnAt(double newX, double newY, double newGroundY) {
+        x = newX;
+        y = newY;
+        groundY = newGroundY;
+        verticalVelocity = 0.0;
+        health = MAX_HEALTH;
+        actionLocked = false;
+        invulnerabilityRemaining = INVULNERABILITY_SECONDS;
+        play("IDLE");
+    }
+
+    boolean isInvulnerable() {
+        return invulnerabilityRemaining > 0.0;
+    }
+
+    private void tickInvulnerability(double deltaSeconds) {
+        if (invulnerabilityRemaining > 0.0) {
+            invulnerabilityRemaining = Math.max(0.0, invulnerabilityRemaining - deltaSeconds);
         }
     }
 
@@ -535,8 +559,43 @@ final class ServerPlayer {
         return y >= groundY && verticalVelocity == 0.0;
     }
 
-    private boolean isDead() {
+    boolean isDead() {
         return health <= 0.0;
+    }
+
+    int getId() {
+        return id;
+    }
+
+    double getX() {
+        return x;
+    }
+
+    double getY() {
+        return y;
+    }
+
+    ServerProjectile createProjectile() {
+        int dir = facingLeft ? -1 : 1;
+        int projSize;
+        double projX;
+        double projY;
+
+        if (characterIndex == 3 && "SPECIAL".equals(action)) {
+            projSize = 128;
+            projX = facingLeft ? x - projSize + 24.0 : x + SIZE - 24.0;
+            projY = y + SIZE - projSize + 12.0;
+        } else if (characterIndex == 1) {
+            projSize = 48;
+            projX = facingLeft ? x - 24.0 : x + SIZE - 24.0;
+            projY = y + SIZE - 42.0;
+        } else {
+            projSize = 48;
+            projX = facingLeft ? x - 24.0 : x + SIZE - 24.0;
+            projY = y + SIZE - 58.0;
+        }
+
+        return new ServerProjectile(id, projX, projY, dir, projSize, pendingDamage);
     }
 
     private double getRight() {

@@ -1,6 +1,8 @@
 package com.engkanto.client.game.entity;
 
+import java.awt.AlphaComposite;
 import java.awt.Color;
+import java.awt.Composite;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -82,6 +84,20 @@ public final class RemotePlayerRenderer {
             proj.update(deltaSeconds);
             if (!proj.active) {
                 projIter.remove();
+                continue;
+            }
+            for (PlayerSnapshot player : state.players) {
+                if (player.id == proj.ownerId || player.dead) {
+                    continue;
+                }
+                if (proj.x + proj.drawSize > player.x
+                        && proj.x < player.x + SIZE
+                        && proj.y + proj.drawSize > player.y
+                        && proj.y < player.y + SIZE) {
+                    proj.active = false;
+                    projIter.remove();
+                    break;
+                }
             }
         }
 
@@ -102,12 +118,25 @@ public final class RemotePlayerRenderer {
         int drawX = (int) Math.round(player.x);
         int drawY = (int) Math.round(player.y + getScaledBottomPadding(frame));
 
+        Composite original = null;
+        if (player.invulnerable) {
+            boolean dim = (System.currentTimeMillis() / 150) % 2 == 0;
+            if (dim) {
+                original = graphics.getComposite();
+                graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.3f));
+            }
+        }
+
         if (player.facingLeft) {
             graphics.drawImage(frame, drawX + SIZE, drawY, drawX, drawY + SIZE,
                     0, 0, frame.getWidth(), frame.getHeight(), null);
         } else {
             graphics.drawImage(frame, drawX, drawY, drawX + SIZE, drawY + SIZE,
                     0, 0, frame.getWidth(), frame.getHeight(), null);
+        }
+
+        if (original != null) {
+            graphics.setComposite(original);
         }
 
         drawPlayerHud(graphics, player, localPlayer);
@@ -181,7 +210,7 @@ public final class RemotePlayerRenderer {
         if (charIndex == 1 && "MOVE_3".equals(action)) {
             double px = left ? snapshot.x - 24.0 : snapshot.x + SIZE - 24.0;
             double py = snapshot.y + SIZE - 42.0;
-            visualProjectiles.add(new VisualProjectile(kapreLogImage, px, py, direction, 48));
+            visualProjectiles.add(new VisualProjectile(kapreLogImage, px, py, direction, 48, snapshot.id));
         } else if (charIndex == 3) {
             spawnEngkantoEffect(snapshot, action, direction);
         }
@@ -193,12 +222,12 @@ public final class RemotePlayerRenderer {
             case "MOVE_1" -> {
                 double px = left ? snapshot.x - 24.0 : snapshot.x + SIZE - 24.0;
                 double py = snapshot.y + SIZE - 58.0;
-                visualProjectiles.add(new VisualProjectile(engkantoMove1Image, px, py, direction, 48));
+                visualProjectiles.add(new VisualProjectile(engkantoMove1Image, px, py, direction, 48, snapshot.id));
             }
             case "MOVE_2" -> {
                 double px = left ? snapshot.x - 24.0 : snapshot.x + SIZE - 24.0;
                 double py = snapshot.y + SIZE - 58.0;
-                visualProjectiles.add(new VisualProjectile(engkantoMove2Image, px, py, direction, 48));
+                visualProjectiles.add(new VisualProjectile(engkantoMove2Image, px, py, direction, 48, snapshot.id));
             }
             case "MOVE_3" -> {
                 double vx = left ? snapshot.x - 96 : snapshot.x + SIZE;
@@ -207,7 +236,7 @@ public final class RemotePlayerRenderer {
             case "SPECIAL" -> {
                 double px = left ? snapshot.x - 128 + 24.0 : snapshot.x + SIZE - 24.0;
                 double py = snapshot.y + SIZE - 128 + 12.0;
-                visualProjectiles.add(new VisualProjectile(engkantoSpecialImage, px, py, direction, 128));
+                visualProjectiles.add(new VisualProjectile(engkantoSpecialImage, px, py, direction, 128, snapshot.id));
             }
             default -> { }
         }
@@ -255,16 +284,18 @@ public final class RemotePlayerRenderer {
         private final BufferedImage image;
         private final int direction;
         private final int drawSize;
+        private final int ownerId;
         private final double y;
         private double x;
         private boolean active = true;
 
-        VisualProjectile(BufferedImage image, double x, double y, int direction, int drawSize) {
+        VisualProjectile(BufferedImage image, double x, double y, int direction, int drawSize, int ownerId) {
             this.image = image;
             this.x = x;
             this.y = y;
             this.direction = direction;
             this.drawSize = drawSize;
+            this.ownerId = ownerId;
         }
 
         void update(double deltaSeconds) {
