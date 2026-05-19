@@ -1,165 +1,107 @@
 # System Architecture
 
-This document describes the current codebase state. The project now has the
-first Milestone 2 socket integration: a Swing client can connect to a Java TCP
-server, send input snapshots, and render server-authoritative player snapshots.
-The original local combat prototype still remains available as a fallback when
-no server is running.
+Engkanto Clash has a Swing client and an optional Java TCP server. If the client
+cannot connect to a server, it starts the local test mode.
 
-## Current Runtime Flow
+## Client Flow
 
 ```text
 ClientMain
-  -> optional NetworkClient TCP connection
+  -> tries NetworkClient unless --offline is used
   -> GameWindow
-      -> GamePanel
-          -> fixed update loop at 60 updates/second
-          -> Java2D render pass
+      -> LobbyPanel if connected
+      -> GamePanel for the actual game
 ```
 
-In local mode, the client owns the playable state:
+The client handles:
 
+- Swing window and Java2D rendering
 - keyboard input
-- player movement and character switching
-- platform collision and drop-through behavior
-- sprite animation
-- local test dummy combat
-- health, damage, healing, poison, death, and respawn
-- projectile spawning, movement, collision, and one-shot hit behavior
-- health and ability cooldown UI
+- local test mode
+- lobby screen
+- chat display and input
+- health, cooldown, timer, leaderboard, and results UI
+- drawing server snapshots in multiplayer
 
-In multiplayer mode:
+`GamePanel` runs at `60` updates per second.
 
-- `ClientMain` attempts to connect to `127.0.0.1:50137` unless `--offline` is
-  provided.
-- `KeyboardInput` converts held keys and one-shot ability requests into
-  `PlayerInputSnapshot` messages.
-- `NetworkClient` writes JSON input messages and keeps the newest
-  `GameStateSnapshot` from the server.
-- `GamePanel` draws the shared map plus every `PlayerSnapshot` received from the
-  server.
-- If the connection is unavailable at startup, the client starts in local mode.
+## Local Mode
 
-## Server Runtime Flow
+Local mode is for testing gameplay without a server. It owns the player, test
+dummy, movement, platforms, attacks, projectiles, health, poison, respawn, and
+cooldown UI.
+
+## Multiplayer Mode
 
 ```text
 ServerMain
   -> GameServer
-      -> ServerSocket accept loop
-      -> fixed update loop at 60 updates/second
-      -> broadcast GameStateSnapshot JSON to connected clients
+      -> accepts TCP clients
+      -> lobby phase
+      -> game phase
+      -> game-over phase
 ```
 
-The server currently owns:
+The server handles:
 
-- player IDs and connection lifecycle
-- authoritative player positions, facing, character selection, animation action,
-  health, death, and respawn
-- movement, jumping, platform landing, and Aswang glide
-- basic player-vs-player hit resolution for direct and ranged abilities
+- up to `4` players
+- character selection and ready state
+- `10` second countdown when all players are ready
+- `180` second match timer
+- authoritative movement, jumping, platforms, and Aswang glide
+- skill cooldowns
+- player HP, deaths, respawns, and respawn invulnerability
+- PvP melee hits, projectiles, poison, Engkanto roots, and kills
 
-## Important Packages
+The client sends input snapshots. The server sends back snapshots that the
+client renders.
 
-```text
-com.engkanto.client
-Desktop entry point and Swing window.
+## Network Messages
 
-com.engkanto.client.net
-TCP client connection, JSON message writing, and background server-state
-reading.
+Client to server:
 
-com.engkanto.client.input
-Keyboard state and one-shot action requests.
+- `select_character`
+- `ready`
+- `input`
+- `chat`
 
-com.engkanto.client.game
-Game loop, arena setup, rendering order, player-vs-dummy hit resolution.
+Server to client:
 
-com.engkanto.client.game.character
-Character definitions, sprite animation metadata, per-character movement,
-cooldown, projectile, and attack rules.
+- `welcome`
+- `lobby_state`
+- `game_start`
+- `state`
+- `chat`
+- `disconnect`
 
-com.engkanto.client.game.combat
-Health, damage, poison, floating damage numbers, health UI, and ability UI.
+Messages are newline-delimited JSON. Gson is used for serialization.
 
-com.engkanto.client.game.entity
-Player, projectile, and test dummy entities.
+## Main Packages
 
-com.engkanto.client.game.world
-Platform geometry and tile rendering.
+- `com.engkanto.client`: client entry point and window
+- `com.engkanto.client.lobby`: multiplayer lobby UI
+- `com.engkanto.client.net`: TCP client
+- `com.engkanto.client.input`: keyboard input snapshots
+- `com.engkanto.client.game`: game loop, rendering, local combat checks
+- `com.engkanto.client.game.character`: character skills and animations
+- `com.engkanto.client.game.combat`: health, damage, poison, and UI
+- `com.engkanto.client.game.entity`: players, projectiles, dummy, remote renderers
+- `com.engkanto.client.game.world`: platforms
+- `com.engkanto.client.render`: sprite loading and debug rendering
+- `com.engkanto.server`: server entry point
+- `com.engkanto.server.game`: server game loop and PvP simulation
+- `com.engkanto.common`: shared models and network DTOs
 
-com.engkanto.client.render
-Sprite and asset loading helpers plus debug HUD rendering.
+## Current Notes
 
-com.engkanto.server
-Server entry point.
+- Local mode and server mode both have combat logic, so skill values must be
+  updated in both places.
+- Local mode is mainly for testing against the dummy.
+- Multiplayer is the main mode for PvP, lobby, chat, timer, kills, and results.
+- The generated app launcher starts the client. The server is run with
+  `runServer`.
 
-com.engkanto.server.game
-Authoritative socket server loop and server-side player simulation.
+## Tests
 
-com.engkanto.common
-Shared snapshot models and JSON message DTOs used by both the client and
-server.
-```
-
-## Combat Flow
-
-```text
-KeyboardInput records a move request.
-Player consumes the request if the move is not on cooldown.
-SpriteAnimator locks the requested attack animation.
-CharacterDefinition customizes attack timing, cooldown, movement lock, and hit behavior.
-GamePanel checks player/test-dummy overlap for direct attacks.
-GamePanel checks projectile/test-dummy hitbox overlap for projectiles.
-DamageComponent applies actual clamped damage to HealthComponent.
-HealthComponent emits damage, heal, and death events.
-```
-
-## Collision Model
-
-- Player world bounds use a `96x96` sprite rectangle.
-- The test dummy exposes a `48x72` hitbox.
-- Direct attacks use player rectangle vs. test dummy hitbox overlap.
-- Projectiles use projectile square vs. test dummy hitbox overlap.
-- Floating platforms can be dropped through by holding Down.
-- The ground platform remains solid.
-
-## UI Model
-
-The current UI is drawn directly in Java2D:
-
-- `HealthUI` draws player health.
-- `AbilityUI` draws `J`, `K`, `E`, and `L` key icons with cooldown state.
-- `DebugRenderer` draws development control hints.
-- `TestDummy` draws its own label, health bar, hit flash, death label, and
-  damage numbers.
-
-## Multiplayer Message Flow
-
-```text
-Client -> Server:
-  ClientMessage { type: "input", input: PlayerInputSnapshot }
-
-Server -> Client:
-  ServerMessage { type: "welcome", playerId: number }
-  ServerMessage { type: "state", state: GameStateSnapshot }
-```
-
-The network uses newline-delimited JSON over TCP sockets. Gson handles the
-message serialization.
-
-## Testing
-
-JUnit coverage currently focuses on `HealthComponent`, including:
-
-- damage and healing clamp behavior
-- dead entities ignoring healing
-- full-heal reporting
-- invalid value handling
-- poison tick timing
-
-## Future Architecture Work
-
-The current multiplayer pass focuses on player synchronization and basic PvP
-authority. Future work should expand the server model to cover exact
-per-character projectile behavior, poison ticking, cooldown UI snapshots, game
-lobbies, and in-game chat display.
+JUnit tests currently focus on `HealthComponent`, including damage, healing,
+death, revive, invalid values, and poison timing.

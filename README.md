@@ -68,4 +68,5 @@ On Windows PowerShell, use `.\gradlew.bat` instead of `./gradlew`.
 ## Docs
 
 - [Gameplay Reference](docs/gameplay.md)
+- [LAN Multiplayer Setup](docs/lan-setup.md)
 - [System Architecture](docs/system-architecture.md)
