@@ -25,10 +25,10 @@ public final class Player {
     private static final double SPEED_PIXELS_PER_SECOND = 180.0;
     private static final double JUMP_VELOCITY_PIXELS_PER_SECOND = -560.0;
     private static final double GRAVITY_PIXELS_PER_SECOND = 1_200.0;
-    private static final double MOVE_1_COOLDOWN_SECONDS = 0.35;
-    private static final double MOVE_2_COOLDOWN_SECONDS = 0.65;
-    private static final double MOVE_3_COOLDOWN_SECONDS = 1.10;
-    private static final double SPECIAL_COOLDOWN_SECONDS = 10.00;
+    private static final double MOVE_1_COOLDOWN_SECONDS = 0.30;
+    private static final double MOVE_2_COOLDOWN_SECONDS = 1.50;
+    private static final double MOVE_3_COOLDOWN_SECONDS = 1.20;
+    private static final double SPECIAL_COOLDOWN_SECONDS = 12.00;
     private static final double JUMP_TAKEOFF_FRAME_SECONDS = 0.10;
     private static final double LANDING_FRAME_SECONDS = 0.16;
 
@@ -51,6 +51,7 @@ public final class Player {
     private double landingFrameRemaining;
 
     private double respawnTimerRemaining;
+    private double rootedSecondsRemaining;
     private static final double RESPAWN_SECONDS = 1.0;
 
     public Player(double x, double y) {
@@ -123,6 +124,7 @@ public final class Player {
         }
 
         updateCooldowns(deltaSeconds);
+        tickRoot(deltaSeconds);
         switchCharacterIfRequested(keyboardInput);
 
         double dx = 0.0;
@@ -279,6 +281,10 @@ public final class Player {
         return getActiveCharacter().getProjectiles();
     }
 
+    public java.util.List<com.engkanto.client.game.character.EngkantoCharacter.Vine> getActiveCharacterVines() {
+        return getActiveCharacter().getVines();
+    }
+
     private void switchCharacterIfRequested(KeyboardInput keyboardInput) {
         if (!keyboardInput.consumeSwitchCharacterRequested() || animator.isLocked()) {
             return;
@@ -399,7 +405,7 @@ public final class Player {
             if (jumpElapsedSeconds < JUMP_TAKEOFF_FRAME_SECONDS) {
                 animator.setFrameIndex(0);
             } else if (verticalVelocity < 0.0) {
-                animator.setFrameIndex(1);
+                animator.setFrameIndex(getActiveCharacter().getAscendingJumpFrame(this, glideHeld));
             } else {
                 animator.setFrameIndex(getActiveCharacter().getFallingJumpFrame(this, glideHeld));
             }
@@ -482,8 +488,23 @@ public final class Player {
         return feetOnPlatformTop && overlapsHorizontally;
     }
 
+    public void applyRoot(double seconds) {
+        rootedSecondsRemaining = Math.max(rootedSecondsRemaining, seconds);
+    }
+
+    public boolean isRooted() {
+        return rootedSecondsRemaining > 0.0;
+    }
+
+    private void tickRoot(double deltaSeconds) {
+        if (rootedSecondsRemaining > 0.0) {
+            rootedSecondsRemaining = Math.max(0.0, rootedSecondsRemaining - deltaSeconds);
+        }
+    }
+
     private boolean isMovementLocked() {
-        return animator.isLocked() && getActiveCharacter().locksMovement(animator.getAction());
+        return rootedSecondsRemaining > 0.0
+                || (animator.isLocked() && getActiveCharacter().locksMovement(animator.getAction()));
     }
 
     private double getLeft() {

@@ -5,8 +5,9 @@ import com.engkanto.client.game.combat.HealthComponent;
 import com.engkanto.client.game.entity.Player;
 
 public final class TikbalangCharacter extends SpriteCharacter {
-    private static final double MOVE_1_DAMAGE = 15.0;
-    private static final double MOVE_2_COOLDOWN_SECONDS = 1.0;
+    private static final double MOVE_1_DAMAGE = 12.0;
+    private static final double MOVE_2_DAMAGE = 22.0;
+    private static final double SPECIAL_DAMAGE = 35.0;
     private static final double DASH_VELOCITY_PIXELS_PER_SECOND = 540.0;
     private static final double DASH_DECAY_PER_SECOND = 1_800.0;
 
@@ -21,7 +22,7 @@ public final class TikbalangCharacter extends SpriteCharacter {
     @Override
     public double getFrameDuration(PlayerAction action, int frameIndex) {
         if (action == PlayerAction.SPECIAL) {
-            return frameIndex == 0 ? 0.40 : 0.20;
+            return frameIndex == 0 ? 0.35 : 0.20;
         }
         return super.getFrameDuration(action, frameIndex);
     }
@@ -96,15 +97,13 @@ public final class TikbalangCharacter extends SpriteCharacter {
         if (action == PlayerAction.MOVE_1) {
             return damage.hit(target, MOVE_1_DAMAGE) > 0.0;
         }
-        return damage.hit(target) > 0.0;
-    }
-
-    @Override
-    public double getCooldown(PlayerAction action, double defaultCooldownSeconds) {
         if (action == PlayerAction.MOVE_2) {
-            return MOVE_2_COOLDOWN_SECONDS;
+            return damage.hit(target, MOVE_2_DAMAGE) > 0.0;
         }
-        return defaultCooldownSeconds;
+        if (action == PlayerAction.SPECIAL) {
+            return damage.hit(target, SPECIAL_DAMAGE) > 0.0;
+        }
+        return damage.hit(target) > 0.0;
     }
 
     @Override

@@ -18,8 +18,10 @@ public final class KapreCharacter extends SpriteCharacter {
     private static final int LOG_SOURCE_Y = 1035;
     private static final int LOG_SOURCE_SIZE = 150;
     private static final int THROW_LAST_FRAME_LEFT_TRIM = 42;
-    private static final double MOVE_1_DAMAGE = 15.0;
-    private static final double MOVE_2_COOLDOWN_SECONDS = 1.0;
+    private static final double MOVE_1_DAMAGE = 12.0;
+    private static final double MOVE_2_DAMAGE = 22.0;
+    private static final double LOG_PROJECTILE_DAMAGE = 8.0;
+    private static final double SPECIAL_DAMAGE = 30.0;
 
     private final BufferedImage logImage;
     private final List<Projectile> projectiles = new ArrayList<>();
@@ -48,7 +50,7 @@ public final class KapreCharacter extends SpriteCharacter {
     @Override
     public double getFrameDuration(PlayerAction action, int frameIndex) {
         if (action == PlayerAction.SPECIAL) {
-            return frameIndex == 2 ? 0.55 : 0.18;
+            return frameIndex == 2 ? 0.60 : 0.18;
         }
         return super.getFrameDuration(action, frameIndex);
     }
@@ -108,15 +110,13 @@ public final class KapreCharacter extends SpriteCharacter {
         if (action == PlayerAction.MOVE_1) {
             return damage.hit(target, MOVE_1_DAMAGE) > 0.0;
         }
-        return damage.hit(target) > 0.0;
-    }
-
-    @Override
-    public double getCooldown(PlayerAction action, double defaultCooldownSeconds) {
         if (action == PlayerAction.MOVE_2) {
-            return MOVE_2_COOLDOWN_SECONDS;
+            return damage.hit(target, MOVE_2_DAMAGE) > 0.0;
         }
-        return defaultCooldownSeconds;
+        if (action == PlayerAction.SPECIAL) {
+            return damage.hit(target, SPECIAL_DAMAGE) > 0.0;
+        }
+        return damage.hit(target) > 0.0;
     }
 
     private void updateLogThrow(Player player) {
@@ -127,7 +127,7 @@ public final class KapreCharacter extends SpriteCharacter {
         int direction = player.isFacingLeft() ? -1 : 1;
         double projectileX = player.isFacingLeft() ? player.getX() - 24.0 : player.getX() + Player.SIZE - 24.0;
         double projectileY = player.getY() + Player.SIZE - 42.0;
-        projectiles.add(new Projectile(logImage, projectileX, projectileY, direction));
+        projectiles.add(new Projectile(logImage, projectileX, projectileY, direction, Projectile.DRAW_SIZE, LOG_PROJECTILE_DAMAGE));
         logThrowPending = false;
     }
 

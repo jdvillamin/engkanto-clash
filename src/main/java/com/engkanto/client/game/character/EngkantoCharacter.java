@@ -18,12 +18,13 @@ public final class EngkantoCharacter extends SpriteCharacter {
     private static final int MOVE_2_PROJECTILE_SOURCE_Y = 770;
     private static final int PROJECTILE_SOURCE_SIZE = 130;
     private static final int SPECIAL_PROJECTILE_DRAW_SIZE = 128;
-    private static final double MOVE_1_COOLDOWN_SECONDS = 0.20;
-    private static final double MOVE_1_PROJECTILE_DAMAGE = 10.0;
-    private static final double MOVE_2_PROJECTILE_DAMAGE = 20.0;
-    private static final double SPECIAL_PROJECTILE_DAMAGE = 25.0;
+    private static final double MOVE_1_COOLDOWN_SECONDS = 0.25;
+    private static final double MOVE_1_PROJECTILE_DAMAGE = 6.0;
+    private static final double MOVE_2_PROJECTILE_DAMAGE = 12.0;
+    private static final double SPECIAL_PROJECTILE_DAMAGE = 18.0;
     private static final int VINE_DRAW_SIZE = 96;
-    private static final double VINE_SECONDS = 0.55;
+    private static final double VINE_SECONDS = 1.5;
+    private static final double VINE_ROOT_SECONDS = 1.5;
 
     private final BufferedImage move1ProjectileImage;
     private final BufferedImage move2ProjectileImage;
@@ -165,7 +166,7 @@ public final class EngkantoCharacter extends SpriteCharacter {
         }
 
         double vineX = player.isFacingLeft() ? player.getX() - VINE_DRAW_SIZE : player.getX() + Player.SIZE;
-        vines.add(new Vine(vineImage, vineX, player.getY(), player.isFacingLeft(), VINE_SECONDS));
+        vines.add(new Vine(vineImage, vineX, player.getY(), player.isFacingLeft(), VINE_SECONDS, VINE_ROOT_SECONDS));
         vinePending = false;
     }
 
@@ -223,19 +224,23 @@ public final class EngkantoCharacter extends SpriteCharacter {
         }
     }
 
-    private static final class Vine {
+    public static final class Vine {
         private final BufferedImage image;
         private final double x;
         private final double y;
         private final boolean facingLeft;
+        private final double rootDuration;
         private double secondsRemaining;
+        private boolean rootApplied;
 
-        private Vine(BufferedImage image, double x, double y, boolean facingLeft, double secondsRemaining) {
+        private Vine(BufferedImage image, double x, double y, boolean facingLeft,
+                     double secondsRemaining, double rootDuration) {
             this.image = image;
             this.x = x;
             this.y = y;
             this.facingLeft = facingLeft;
             this.secondsRemaining = secondsRemaining;
+            this.rootDuration = rootDuration;
         }
 
         private void update(double deltaSeconds) {
@@ -250,13 +255,41 @@ public final class EngkantoCharacter extends SpriteCharacter {
             }
         }
 
-        private boolean isActive() {
+        public boolean isActive() {
             return secondsRemaining > 0.0;
+        }
+
+        public boolean canRoot() {
+            return !rootApplied;
+        }
+
+        public void markRootApplied() {
+            rootApplied = true;
+        }
+
+        public double getRootDuration() {
+            return rootDuration;
+        }
+
+        public boolean overlaps(double targetX, double targetY, double targetSize) {
+            return x + VINE_DRAW_SIZE > targetX
+                    && x < targetX + targetSize
+                    && y + VINE_DRAW_SIZE > targetY
+                    && y < targetY + targetSize;
+        }
+
+        public BufferedImage getImage() {
+            return image;
         }
     }
 
     @Override
     public List<Projectile> getProjectiles() {
         return projectiles;
+    }
+
+    @Override
+    public List<Vine> getVines() {
+        return vines;
     }
 }

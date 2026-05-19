@@ -1,6 +1,8 @@
 package com.engkanto.client.game.entity;
 
+import java.awt.AlphaComposite;
 import java.awt.Color;
+import java.awt.Composite;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -12,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.engkanto.client.audio.HitSoundEffect;
 import com.engkanto.client.game.GameConfig;
 import com.engkanto.client.game.character.AswangCharacter;
 import com.engkanto.client.game.character.CharacterDefinition;
@@ -28,6 +31,8 @@ public final class RemotePlayerRenderer {
     private static final int SIZE = 96;
     private static final int HEALTH_BAR_WIDTH = 78;
     private static final int HEALTH_BAR_HEIGHT = 8;
+    private static final float HIT_FLASH_ALPHA = 0.35f;
+    private static final Color HIT_FLASH_COLOR = new Color(255, 50, 50);
 
     private final CharacterDefinition[] characters = {
             new TikbalangCharacter(),
@@ -82,6 +87,20 @@ public final class RemotePlayerRenderer {
             proj.update(deltaSeconds);
             if (!proj.active) {
                 projIter.remove();
+                continue;
+            }
+            for (PlayerSnapshot player : state.players) {
+                if (player.id == proj.ownerId || player.dead) {
+                    continue;
+                }
+                if (proj.x + proj.drawSize > player.x
+                        && proj.x < player.x + SIZE
+                        && proj.y + proj.drawSize > player.y
+                        && proj.y < player.y + SIZE) {
+                    proj.active = false;
+                    projIter.remove();
+                    break;
+                }
             }
         }
 
@@ -102,12 +121,32 @@ public final class RemotePlayerRenderer {
         int drawX = (int) Math.round(player.x);
         int drawY = (int) Math.round(player.y + getScaledBottomPadding(frame));
 
-        if (player.facingLeft) {
-            graphics.drawImage(frame, drawX + SIZE, drawY, drawX, drawY + SIZE,
-                    0, 0, frame.getWidth(), frame.getHeight(), null);
-        } else {
-            graphics.drawImage(frame, drawX, drawY, drawX + SIZE, drawY + SIZE,
-                    0, 0, frame.getWidth(), frame.getHeight(), null);
+        Composite original = null;
+        if (player.invulnerable) {
+            boolean dim = (System.currentTimeMillis() / 150) % 2 == 0;
+            if (dim) {
+                original = graphics.getComposite();
+                graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.3f));
+            }
+        }
+
+        drawSpriteFrame(graphics, frame, drawX, drawY, player.facingLeft);
+
+        if (original != null) {
+            graphics.setComposite(original);
+        }
+
+        if (player.hitFlashSecondsRemaining > 0.0 && !player.dead) {
+            drawHitFlashOverlay(graphics, frame, drawX, drawY, player.facingLeft);
+        }
+
+        if (player.rootedSecondsRemaining > 0.0) {
+            Composite prevComposite = graphics.getComposite();
+            graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.7f));
+            int vineDrawX = drawX;
+            int vineDrawY = (int) Math.round(player.y);
+            graphics.drawImage(engkantoVineImage, vineDrawX, vineDrawY, SIZE, SIZE, null);
+            graphics.setComposite(prevComposite);
         }
 
         drawPlayerHud(graphics, player, localPlayer);
@@ -166,6 +205,12 @@ public final class RemotePlayerRenderer {
             state.effectSpawned = true;
         }
 
+        boolean inHitFlash = snapshot.hitFlashSecondsRemaining > 0.0;
+        if (inHitFlash && !state.wasInHitFlash) {
+            HitSoundEffect.getInstance().play();
+        }
+        state.wasInHitFlash = inHitFlash;
+
         state.lastAction = action;
         state.lastFrameIndex = frame;
     }
@@ -181,7 +226,7 @@ public final class RemotePlayerRenderer {
         if (charIndex == 1 && "MOVE_3".equals(action)) {
             double px = left ? snapshot.x - 24.0 : snapshot.x + SIZE - 24.0;
             double py = snapshot.y + SIZE - 42.0;
-            visualProjectiles.add(new VisualProjectile(kapreLogImage, px, py, direction, 48));
+            visualProjectiles.add(new VisualProjectile(kapreLogImage, px, py, direction, 48, snapshot.id));
         } else if (charIndex == 3) {
             spawnEngkantoEffect(snapshot, action, direction);
         }
@@ -193,21 +238,21 @@ public final class RemotePlayerRenderer {
             case "MOVE_1" -> {
                 double px = left ? snapshot.x - 24.0 : snapshot.x + SIZE - 24.0;
                 double py = snapshot.y + SIZE - 58.0;
-                visualProjectiles.add(new VisualProjectile(engkantoMove1Image, px, py, direction, 48));
+                visualProjectiles.add(new VisualProjectile(engkantoMove1Image, px, py, direction, 48, snapshot.id));
             }
             case "MOVE_2" -> {
                 double px = left ? snapshot.x - 24.0 : snapshot.x + SIZE - 24.0;
                 double py = snapshot.y + SIZE - 58.0;
-                visualProjectiles.add(new VisualProjectile(engkantoMove2Image, px, py, direction, 48));
+                visualProjectiles.add(new VisualProjectile(engkantoMove2Image, px, py, direction, 48, snapshot.id));
             }
             case "MOVE_3" -> {
                 double vx = left ? snapshot.x - 96 : snapshot.x + SIZE;
-                visualVines.add(new VisualVine(engkantoVineImage, vx, snapshot.y, left, 0.55));
+                visualVines.add(new VisualVine(engkantoVineImage, vx, snapshot.y, left, 1.5));
             }
             case "SPECIAL" -> {
                 double px = left ? snapshot.x - 128 + 24.0 : snapshot.x + SIZE - 24.0;
                 double py = snapshot.y + SIZE - 128 + 12.0;
-                visualProjectiles.add(new VisualProjectile(engkantoSpecialImage, px, py, direction, 128));
+                visualProjectiles.add(new VisualProjectile(engkantoSpecialImage, px, py, direction, 128, snapshot.id));
             }
             default -> { }
         }
@@ -226,6 +271,30 @@ public final class RemotePlayerRenderer {
 
     private double getScaledBottomPadding(BufferedImage frame) {
         return getBottomPadding(frame) * SIZE / (double) frame.getHeight();
+    }
+
+    private void drawSpriteFrame(Graphics2D graphics, BufferedImage frame, int drawX, int drawY, boolean facingLeft) {
+        if (facingLeft) {
+            graphics.drawImage(frame, drawX + SIZE, drawY, drawX, drawY + SIZE,
+                    0, 0, frame.getWidth(), frame.getHeight(), null);
+        } else {
+            graphics.drawImage(frame, drawX, drawY, drawX + SIZE, drawY + SIZE,
+                    0, 0, frame.getWidth(), frame.getHeight(), null);
+        }
+    }
+
+    private void drawHitFlashOverlay(Graphics2D graphics, BufferedImage frame, int drawX, int drawY, boolean facingLeft) {
+        BufferedImage overlay = new BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D overlayGraphics = overlay.createGraphics();
+        try {
+            drawSpriteFrame(overlayGraphics, frame, 0, 0, facingLeft);
+            overlayGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_IN, HIT_FLASH_ALPHA));
+            overlayGraphics.setColor(HIT_FLASH_COLOR);
+            overlayGraphics.fillRect(0, 0, SIZE, SIZE);
+        } finally {
+            overlayGraphics.dispose();
+        }
+        graphics.drawImage(overlay, drawX, drawY, null);
     }
 
     private int getBottomPadding(BufferedImage frame) {
@@ -248,6 +317,7 @@ public final class RemotePlayerRenderer {
         String lastAction = "IDLE";
         int lastFrameIndex;
         boolean effectSpawned;
+        boolean wasInHitFlash;
     }
 
     private static final class VisualProjectile {
@@ -255,16 +325,18 @@ public final class RemotePlayerRenderer {
         private final BufferedImage image;
         private final int direction;
         private final int drawSize;
+        private final int ownerId;
         private final double y;
         private double x;
         private boolean active = true;
 
-        VisualProjectile(BufferedImage image, double x, double y, int direction, int drawSize) {
+        VisualProjectile(BufferedImage image, double x, double y, int direction, int drawSize, int ownerId) {
             this.image = image;
             this.x = x;
             this.y = y;
             this.direction = direction;
             this.drawSize = drawSize;
+            this.ownerId = ownerId;
         }
 
         void update(double deltaSeconds) {

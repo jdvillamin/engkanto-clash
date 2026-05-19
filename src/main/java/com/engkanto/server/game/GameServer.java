@@ -9,6 +9,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,12 +29,19 @@ public final class GameServer {
     private static final double COUNTDOWN_SECONDS = 10.0;
     private static final int SCREEN_HEIGHT = 704;
 
+    private static final double[][] SPAWN_CANDIDATES = {
+            {160, 512}, {640, 512}, {1120, 512},
+            {256, 396}, {568, 296}, {880, 396},
+            {408, 196}, {720, 196}, {1112, 296}
+    };
+
     private enum Phase { LOBBY, IN_GAME }
 
     private final Gson gson = new Gson();
     private final Object lock = new Object();
     private final Map<Integer, ClientConnection> clients = new LinkedHashMap<>();
     private final Map<Integer, ServerPlayer> players = new LinkedHashMap<>();
+    private final List<ServerProjectile> projectiles = new ArrayList<>();
     private final List<ServerPlatform> platforms = createPlatforms();
     private final int port;
 
@@ -142,6 +150,10 @@ public final class GameServer {
                 player.update(deltaSeconds, platforms);
             }
             resolvePlayerCombat();
+            resolveVineRoots();
+            resolvePoisons(deltaSeconds);
+            updateProjectiles(deltaSeconds);
+            respawnReadyPlayers();
             tick++;
             snapshot = createSnapshot();
             connections = new ArrayList<>(clients.values());
@@ -263,20 +275,118 @@ public final class GameServer {
             if (!attacker.hasAttackReady()) {
                 continue;
             }
-            boolean hitLanded = false;
-            for (ServerPlayer target : players.values()) {
-                if (attacker.canHit(target)) {
-                    boolean killed = target.takeDamage(attacker.getPendingDamage());
-                    if (killed) {
-                        attacker.addKill();
+            if (attacker.isPendingRangedAttack()) {
+                projectiles.add(attacker.createProjectile());
+                attacker.markAttackResolved();
+            } else {
+                for (ServerPlayer target : players.values()) {
+                    if (attacker.canHit(target)) {
+                        boolean killed = target.takeDamage(attacker.getPendingDamage());
+                        if (killed) {
+                            attacker.addKill();
+                        }
+                        if (attacker.isPendingPoison() && !target.isDead()) {
+                            target.applyPoison(attacker.getId());
+                        }
                     }
-                    hitLanded = true;
                 }
-            }
-            if (hitLanded || !attacker.isPendingRangedAttack()) {
                 attacker.markAttackResolved();
             }
         }
+    }
+
+    private void resolvePoisons(double deltaSeconds) {
+        for (ServerPlayer player : players.values()) {
+            if (player.isDead()) {
+                continue;
+            }
+            int killerOwnerId = player.tickPoisons(deltaSeconds);
+            if (killerOwnerId >= 0) {
+                ServerPlayer killer = players.get(killerOwnerId);
+                if (killer != null) {
+                    killer.addKill();
+                }
+            }
+        }
+    }
+
+    private void resolveVineRoots() {
+        for (ServerPlayer caster : players.values()) {
+            if (!caster.hasVineRootReady()) {
+                continue;
+            }
+            for (ServerPlayer target : players.values()) {
+                if (target == caster || target.isDead() || target.isInvulnerable()) {
+                    continue;
+                }
+                if (caster.overlapsVineRoot(target)) {
+                    target.applyRoot(caster.getVineRootDuration());
+                }
+            }
+            caster.markVineRootResolved();
+        }
+    }
+
+    private void updateProjectiles(double deltaSeconds) {
+        Iterator<ServerProjectile> iter = projectiles.iterator();
+        while (iter.hasNext()) {
+            ServerProjectile projectile = iter.next();
+            projectile.update(deltaSeconds);
+            if (!projectile.isActive()) {
+                iter.remove();
+                continue;
+            }
+            for (ServerPlayer target : players.values()) {
+                if (target.getId() == projectile.getOwnerId() || target.isDead()
+                        || target.isInvulnerable()) {
+                    continue;
+                }
+                if (projectile.overlaps(target.getX(), target.getY())) {
+                    boolean killed = target.takeDamage(projectile.getDamage());
+                    if (killed) {
+                        ServerPlayer owner = players.get(projectile.getOwnerId());
+                        if (owner != null) {
+                            owner.addKill();
+                        }
+                    }
+                    iter.remove();
+                    break;
+                }
+            }
+        }
+    }
+
+    private void respawnReadyPlayers() {
+        for (ServerPlayer player : players.values()) {
+            if (player.isReadyToRespawn()) {
+                double[] spawn = findBestSpawnPoint(player);
+                player.respawnAt(spawn[0], spawn[1], spawn[1]);
+            }
+        }
+    }
+
+    private double[] findBestSpawnPoint(ServerPlayer respawning) {
+        double[] best = SPAWN_CANDIDATES[0];
+        double bestMinDist = -1.0;
+
+        for (double[] candidate : SPAWN_CANDIDATES) {
+            double minDist = Double.MAX_VALUE;
+            for (ServerPlayer other : players.values()) {
+                if (other.getId() == respawning.getId() || other.isDead()) {
+                    continue;
+                }
+                double dx = candidate[0] - other.getX();
+                double dy = candidate[1] - other.getY();
+                double dist = Math.sqrt(dx * dx + dy * dy);
+                minDist = Math.min(minDist, dist);
+            }
+            if (minDist > bestMinDist) {
+                bestMinDist = minDist;
+                best = candidate;
+            }
+        }
+
+        return best;
     }
 
     private GameStateSnapshot createSnapshot() {

@@ -1,5 +1,7 @@
 package com.engkanto.server.game;
 
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import com.engkanto.common.model.PlayerInputSnapshot;
@@ -16,8 +18,19 @@ final class ServerPlayer {
     private static final double GRAVITY_PIXELS_PER_SECOND = 1_200.0;
     private static final double RESPAWN_SECONDS = 1.0;
     private static final double ATTACK_IMPACT_SECONDS = 0.18;
+    private static final double INVULNERABILITY_SECONDS = 3.0;
+    private static final double JUMP_TAKEOFF_FRAME_SECONDS = 0.10;
+    private static final double LANDING_FRAME_SECONDS = 0.16;
     private static final double DASH_VELOCITY = 540.0;
     private static final double DASH_DECAY = 1_800.0;
+    private static final double GLIDE_GRAVITY_SCALE = 0.22;
+    private static final double GLIDE_MAX_FALL_VELOCITY = 150.0;
+    private static final double VINE_ROOT_DURATION = 1.5;
+    private static final int VINE_ROOT_SIZE = 96;
+    private static final double HIT_FLASH_SECONDS = 0.15;
+    private static final double POISON_DAMAGE_PER_TICK = 4.0;
+    private static final double POISON_TICK_INTERVAL = 0.5;
+    private static final double POISON_DURATION = 5.0;
 
     static final String[] CHARACTER_NAMES = {
             "Tikbalang", "Kapre", "Aswang", "Engkanto"
@@ -45,9 +58,17 @@ final class ServerPlayer {
     private double move2CooldownRemaining;
     private double move3CooldownRemaining;
     private double specialCooldownRemaining;
+    private double jumpElapsedSeconds;
+    private double landingFrameRemaining;
     private double dashVelocity;
     private int committedDashDirection;
     private boolean specialDashPending;
+    private double invulnerabilityRemaining;
+    private double rootedSecondsRemaining;
+    private boolean vineRootPending;
+    private final List<PoisonEffect> poisonEffects = new ArrayList<>();
+    private boolean pendingPoison;
+    private double hitFlashSecondsRemaining;
     private int kills;
 
     ServerPlayer(int id, double x, double y) {
@@ -77,6 +98,9 @@ final class ServerPlayer {
             return;
         }
 
+        tickInvulnerability(deltaSeconds);
+        tickHitFlash(deltaSeconds);
+        tickRoot(deltaSeconds);
         tickCooldowns(deltaSeconds);
         switchCharacterIfRequested();
 
@@ -108,6 +132,8 @@ final class ServerPlayer {
 
         if (!isMovementLocked() && input.upPressed && isOnGround()) {
             verticalVelocity = JUMP_VELOCITY_PIXELS_PER_SECOND;
+            jumpElapsedSeconds = 0.0;
+            landingFrameRemaining = 0.0;
         }
 
         dropThroughPlatformIfRequested(platforms);
@@ -116,6 +142,7 @@ final class ServerPlayer {
         x += (movementVelocity + dashVelocity) * deltaSeconds;
         landOnPlatformIfFalling(platforms, previousBottom, input.downPressed);
         updateAnimation(deltaSeconds);
+        updateJumpFrame();
         keepInsideScreen();
     }
 
@@ -124,7 +151,7 @@ final class ServerPlayer {
     }
 
     boolean canHit(ServerPlayer target) {
-        if (target == this || target.isDead()) {
+        if (target == this || target.isDead() || target.isInvulnerable()) {
             return false;
         }
         if (pendingRangedAttack) {
@@ -139,13 +166,15 @@ final class ServerPlayer {
 
     void markAttackResolved() {
         attackPending = false;
+        pendingPoison = false;
     }
 
     boolean takeDamage(double damage) {
-        if (damage <= 0.0 || isDead()) {
+        if (damage <= 0.0 || isDead() || isInvulnerable()) {
             return false;
         }
         health = Math.max(0.0, health - damage);
+        hitFlashSecondsRemaining = HIT_FLASH_SECONDS;
         if (health == 0.0) {
             action = "DEATH";
             frameIndex = 0;
@@ -187,6 +216,9 @@ final class ServerPlayer {
         snapshot.specialCooldownRemaining = specialCooldownRemaining;
         snapshot.specialCooldownDuration = getCooldown("SPECIAL");
         snapshot.kills = kills;
+        snapshot.invulnerable = isInvulnerable();
+        snapshot.rootedSecondsRemaining = rootedSecondsRemaining;
+        snapshot.hitFlashSecondsRemaining = hitFlashSecondsRemaining;
         return snapshot;
     }
 
@@ -195,11 +227,42 @@ final class ServerPlayer {
         dashVelocity = 0.0;
         committedDashDirection = 0;
         specialDashPending = false;
+        vineRootPending = false;
+        rootedSecondsRemaining = 0.0;
+        hitFlashSecondsRemaining = 0.0;
+        poisonEffects.clear();
         respawnTimerRemaining -= deltaSeconds;
-        if (respawnTimerRemaining <= 0.0) {
-            health = MAX_HEALTH;
-            actionLocked = false;
-            play("IDLE");
+    }
+
+    boolean isReadyToRespawn() {
+        return isDead() && respawnTimerRemaining <= 0.0;
+    }
+
+    void respawnAt(double newX, double newY, double newGroundY) {
+        x = newX;
+        y = newY;
+        groundY = newGroundY;
+        verticalVelocity = 0.0;
+        health = MAX_HEALTH;
+        actionLocked = false;
+        rootedSecondsRemaining = 0.0;
+        invulnerabilityRemaining = INVULNERABILITY_SECONDS;
+        play("IDLE");
+    }
+
+    boolean isInvulnerable() {
+        return invulnerabilityRemaining > 0.0;
+    }
+
+    private void tickInvulnerability(double deltaSeconds) {
+        if (invulnerabilityRemaining > 0.0) {
+            invulnerabilityRemaining = Math.max(0.0, invulnerabilityRemaining - deltaSeconds);
+        }
+    }
+
+    private void tickHitFlash(double deltaSeconds) {
+        if (hitFlashSecondsRemaining > 0.0) {
+            hitFlashSecondsRemaining = Math.max(0.0, hitFlashSecondsRemaining - deltaSeconds);
         }
     }
 
@@ -249,9 +312,13 @@ final class ServerPlayer {
         playOnce(nextAction);
         pendingDamage = getDamageFor(nextAction);
         pendingRangedAttack = isRangedAttack(nextAction);
+        pendingPoison = characterIndex == 2 && "SPECIAL".equals(nextAction);
         attackPending = pendingDamage > 0.0;
         if (characterIndex == 2 && "MOVE_3".equals(nextAction)) {
-            health = Math.min(MAX_HEALTH, health + 25.0);
+            health = Math.min(MAX_HEALTH, health + 20.0);
+        }
+        if (characterIndex == 3 && "MOVE_3".equals(nextAction)) {
+            vineRootPending = true;
         }
         if (characterIndex == 0) {
             if ("MOVE_3".equals(nextAction)) {
@@ -275,26 +342,28 @@ final class ServerPlayer {
     private double getDamageFor(String nextAction) {
         return switch (characterIndex) {
             case 0 -> switch (nextAction) {
-                case "MOVE_1" -> 15.0;
-                case "MOVE_2", "SPECIAL" -> 25.0;
+                case "MOVE_1" -> 12.0;
+                case "MOVE_2" -> 22.0;
+                case "SPECIAL" -> 35.0;
                 default -> 0.0;
             };
             case 1 -> switch (nextAction) {
-                case "MOVE_1" -> 15.0;
-                case "MOVE_2", "SPECIAL" -> 25.0;
-                case "MOVE_3" -> 10.0;
+                case "MOVE_1" -> 12.0;
+                case "MOVE_2" -> 22.0;
+                case "MOVE_3" -> 8.0;
+                case "SPECIAL" -> 30.0;
                 default -> 0.0;
             };
             case 2 -> switch (nextAction) {
-                case "MOVE_1" -> 15.0;
-                case "MOVE_2" -> 25.0;
-                case "SPECIAL" -> 10.0;
+                case "MOVE_1" -> 12.0;
+                case "MOVE_2" -> 18.0;
+                case "SPECIAL" -> 8.0;
                 default -> 0.0;
             };
             case 3 -> switch (nextAction) {
-                case "MOVE_1" -> 10.0;
-                case "MOVE_2" -> 20.0;
-                case "SPECIAL" -> 25.0;
+                case "MOVE_1" -> 6.0;
+                case "MOVE_2" -> 12.0;
+                case "SPECIAL" -> 18.0;
                 default -> 0.0;
             };
             default -> 0.0;
@@ -303,10 +372,10 @@ final class ServerPlayer {
 
     private double getCooldown(String nextAction) {
         return switch (nextAction) {
-            case "MOVE_1" -> characterIndex == 3 ? 0.20 : 0.35;
-            case "MOVE_2" -> characterIndex == 0 || characterIndex == 1 || characterIndex == 2 ? 1.0 : 0.65;
-            case "MOVE_3" -> 1.10;
-            case "SPECIAL" -> 10.0;
+            case "MOVE_1" -> characterIndex == 3 ? 0.25 : 0.30;
+            case "MOVE_2" -> 1.50;
+            case "MOVE_3" -> characterIndex == 2 ? 4.0 : 1.20;
+            case "SPECIAL" -> 12.0;
             default -> 0.0;
         };
     }
@@ -322,16 +391,29 @@ final class ServerPlayer {
     }
 
     private void updateJump(double deltaSeconds) {
+        if (landingFrameRemaining > 0.0) {
+            landingFrameRemaining = Math.max(0.0, landingFrameRemaining - deltaSeconds);
+        }
         if (isOnGround() && verticalVelocity >= 0.0) {
             return;
         }
+        jumpElapsedSeconds += deltaSeconds;
         y += verticalVelocity * deltaSeconds;
-        double gravityScale = characterIndex == 2 && input.glidePressed && verticalVelocity > 0.0 ? 0.35 : 1.0;
+        boolean gliding = isAswangGliding();
+        double gravityScale = gliding ? GLIDE_GRAVITY_SCALE : 1.0;
         verticalVelocity += GRAVITY_PIXELS_PER_SECOND * gravityScale * deltaSeconds;
+        if (gliding) {
+            verticalVelocity = Math.min(verticalVelocity, GLIDE_MAX_FALL_VELOCITY);
+        }
         if (y >= groundY) {
             y = groundY;
             verticalVelocity = 0.0;
+            landingFrameRemaining = LANDING_FRAME_SECONDS;
         }
+    }
+
+    private boolean isAswangGliding() {
+        return characterIndex == 2 && input.glidePressed && verticalVelocity > 0.0;
     }
 
     private void dropThroughPlatformIfRequested(List<ServerPlatform> platforms) {
@@ -429,6 +511,25 @@ final class ServerPlayer {
         }
     }
 
+    private void updateJumpFrame() {
+        if (!"JUMP".equals(action) || actionLocked) {
+            return;
+        }
+        if (landingFrameRemaining > 0.0) {
+            frameIndex = 3;
+            return;
+        }
+        if (!isOnGround()) {
+            if (jumpElapsedSeconds < JUMP_TAKEOFF_FRAME_SECONDS) {
+                frameIndex = 0;
+            } else if (verticalVelocity < 0.0) {
+                frameIndex = characterIndex == 2 ? 2 : 1;
+            } else {
+                frameIndex = 2;
+            }
+        }
+    }
+
     private void updateDash(double deltaSeconds) {
         if (characterIndex != 0) {
             dashVelocity = 0.0;
@@ -473,6 +574,7 @@ final class ServerPlayer {
         if (actionLocked && !"DEATH".equals(action)) {
             actionLocked = false;
             attackPending = false;
+            vineRootPending = false;
             play("IDLE");
         }
     }
@@ -504,16 +606,40 @@ final class ServerPlayer {
     }
 
     private double frameDuration(String nextAction, int index) {
-        if ("MOVE_3".equals(nextAction)) {
+        if ("MOVE_1".equals(nextAction)) {
             return 0.10;
         }
+        if ("MOVE_2".equals(nextAction)) {
+            return 0.14;
+        }
+        if ("MOVE_3".equals(nextAction)) {
+            return frameDurationMove3(index);
+        }
         if ("SPECIAL".equals(nextAction)) {
-            return index == 2 ? 0.55 : 0.18;
+            return frameDurationSpecial(index);
         }
         if ("DEATH".equals(nextAction)) {
             return 0.16;
         }
         return 0.12;
+    }
+
+    private double frameDurationMove3(int index) {
+        return switch (characterIndex) {
+            case 2 -> index == 2 ? 0.42 : 0.10;
+            case 3 -> index == 1 ? 0.48 : 0.12;
+            default -> 0.10;
+        };
+    }
+
+    private double frameDurationSpecial(int index) {
+        return switch (characterIndex) {
+            case 0 -> index == 0 ? 0.35 : 0.20;
+            case 1 -> index == 2 ? 0.60 : 0.18;
+            case 2 -> index == 1 ? 0.48 : 0.18;
+            case 3 -> index == 1 ? 0.48 : 0.12;
+            default -> index == 2 ? 0.55 : 0.18;
+        };
     }
 
     private void tickCooldowns(double deltaSeconds) {
@@ -528,15 +654,127 @@ final class ServerPlayer {
     }
 
     private boolean isMovementLocked() {
-        return actionLocked && ("MOVE_2".equals(action) || "MOVE_3".equals(action) || "SPECIAL".equals(action));
+        return rootedSecondsRemaining > 0.0
+                || (actionLocked && ("MOVE_2".equals(action) || "MOVE_3".equals(action) || "SPECIAL".equals(action)));
+    }
+
+    private void tickRoot(double deltaSeconds) {
+        if (rootedSecondsRemaining > 0.0) {
+            rootedSecondsRemaining = Math.max(0.0, rootedSecondsRemaining - deltaSeconds);
+        }
+    }
+
+    void applyRoot(double seconds) {
+        rootedSecondsRemaining = Math.max(rootedSecondsRemaining, seconds);
+    }
+
+    boolean hasVineRootReady() {
+        return vineRootPending && actionElapsedSeconds >= ATTACK_IMPACT_SECONDS;
+    }
+
+    void markVineRootResolved() {
+        vineRootPending = false;
+    }
+
+    boolean overlapsVineRoot(ServerPlayer target) {
+        double vineX = facingLeft ? x - VINE_ROOT_SIZE : x + SIZE;
+        double vineRight = vineX + VINE_ROOT_SIZE;
+        double vineTop = y;
+        double vineBottom = y + SIZE;
+        return vineRight > target.x
+                && vineX < target.getRight()
+                && vineBottom > target.y
+                && vineTop < target.getBottom();
+    }
+
+    double getVineRootDuration() {
+        return VINE_ROOT_DURATION;
+    }
+
+    double getRootedSecondsRemaining() {
+        return rootedSecondsRemaining;
+    }
+
+    boolean isPendingPoison() {
+        return pendingPoison;
+    }
+
+    void applyPoison(int ownerId) {
+        poisonEffects.add(new PoisonEffect(ownerId, POISON_DAMAGE_PER_TICK,
+                POISON_TICK_INTERVAL, POISON_DURATION));
+    }
+
+    int tickPoisons(double deltaSeconds) {
+        int killerOwnerId = -1;
+        Iterator<PoisonEffect> iter = poisonEffects.iterator();
+        while (iter.hasNext()) {
+            PoisonEffect effect = iter.next();
+            double elapsed = Math.min(deltaSeconds, effect.remaining);
+            effect.remaining -= elapsed;
+            effect.tickTimer -= elapsed;
+            while (effect.tickTimer <= 0.0 && !isDead()) {
+                health = Math.max(0.0, health - effect.damagePerTick);
+                hitFlashSecondsRemaining = HIT_FLASH_SECONDS;
+                if (health == 0.0) {
+                    killerOwnerId = effect.ownerId;
+                    action = "DEATH";
+                    frameIndex = 0;
+                    frameTimer = 0.0;
+                    actionLocked = true;
+                    respawnTimerRemaining = RESPAWN_SECONDS;
+                    poisonEffects.clear();
+                    return killerOwnerId;
+                }
+                effect.tickTimer += effect.tickInterval;
+            }
+            if (effect.remaining <= 0.0) {
+                iter.remove();
+            }
+        }
+        return killerOwnerId;
     }
 
     private boolean isOnGround() {
         return y >= groundY && verticalVelocity == 0.0;
     }
 
-    private boolean isDead() {
+    boolean isDead() {
         return health <= 0.0;
+    }
+
+    int getId() {
+        return id;
+    }
+
+    double getX() {
+        return x;
+    }
+
+    double getY() {
+        return y;
+    }
+
+    ServerProjectile createProjectile() {
+        int dir = facingLeft ? -1 : 1;
+        int projSize;
+        double projX;
+        double projY;
+
+        if (characterIndex == 3 && "SPECIAL".equals(action)) {
+            projSize = 128;
+            projX = facingLeft ? x - projSize + 24.0 : x + SIZE - 24.0;
+            projY = y + SIZE - projSize + 12.0;
+        } else if (characterIndex == 1) {
+            projSize = 48;
+            projX = facingLeft ? x - 24.0 : x + SIZE - 24.0;
+            projY = y + SIZE - 42.0;
+        } else {
+            projSize = 48;
+            projX = facingLeft ? x - 24.0 : x + SIZE - 24.0;
+            projY = y + SIZE - 58.0;
+        }
+
+        return new ServerProjectile(id, projX, projY, dir, projSize, pendingDamage);
     }
 
     private double getRight() {
@@ -555,5 +793,21 @@ final class ServerPlayer {
 
     private double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(value, max));
+    }
+
+    private static final class PoisonEffect {
+        final int ownerId;
+        final double damagePerTick;
+        final double tickInterval;
+        double remaining;
+        double tickTimer;
+
+        PoisonEffect(int ownerId, double damagePerTick, double tickInterval, double duration) {
+            this.ownerId = ownerId;
+            this.damagePerTick = damagePerTick;
+            this.tickInterval = tickInterval;
+            this.remaining = duration;
+            this.tickTimer = tickInterval;
+        }
     }
 }

@@ -21,6 +21,9 @@ public final class PlayerSnapshot {
     public double specialCooldownRemaining;
     public double specialCooldownDuration;
     public int kills;
+    public boolean invulnerable;
+    public double rootedSecondsRemaining;
+    public double hitFlashSecondsRemaining;
 
     public PlayerSnapshot() {
     }
