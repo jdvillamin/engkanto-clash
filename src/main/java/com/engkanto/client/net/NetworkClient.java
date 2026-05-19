@@ -9,6 +9,8 @@ import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.engkanto.common.model.GameStateSnapshot;
@@ -27,6 +29,7 @@ public final class NetworkClient implements Closeable {
     private final PrintWriter writer;
     private final AtomicReference<GameStateSnapshot> latestState = new AtomicReference<>();
     private final AtomicReference<LobbySnapshot> latestLobbyState = new AtomicReference<>();
+    private final CopyOnWriteArrayList<ChatMessage> chatMessages = new CopyOnWriteArrayList<>();
 
     private volatile boolean connected = true;
     private volatile int localPlayerId;
@@ -65,6 +68,10 @@ public final class NetworkClient implements Closeable {
         return gameStarted;
     }
 
+    public List<ChatMessage> getChatMessages() {
+        return chatMessages;
+    }
+
     public void sendCharacterSelect(int characterIndex) {
         if (!isConnected()) {
             return;
@@ -95,13 +102,40 @@ public final class NetworkClient implements Closeable {
         }
     }
 
+    public void sendChat(String text) {
+        if (!isConnected() || text == null || text.isBlank()) {
+            return;
+        }
+        writer.println(gson.toJson(ClientMessage.chat(text)));
+        if (writer.checkError()) {
+            connected = false;
+        }
+    }
+
     @Override
     public void close() {
         connected = false;
         try {
             socket.close();
         } catch (IOException exception) {
-            // Socket is already closing.
+            
+        }
+    }
+
+    public static final class ChatMessage {
+        public final int senderId;
+        public final String text;
+        public final long timestampMillis;
+
+        private ChatMessage(int senderId, String text) {
+            this.senderId = senderId;
+            this.text = text;
+            this.timestampMillis = System.currentTimeMillis();
+        }
+
+        @Override
+        public String toString() {
+            return "Player " + senderId + ": " + text;
         }
     }
 
@@ -118,7 +152,6 @@ public final class NetworkClient implements Closeable {
                 handleServerMessage(line);
             }
         } catch (IOException exception) {
-            // Disconnection is reflected through the connected flag.
         } finally {
             connected = false;
         }
@@ -138,6 +171,8 @@ public final class NetworkClient implements Closeable {
                 gameStarted = true;
             } else if ("state".equals(message.type) && message.state != null) {
                 latestState.set(message.state);
+            } else if ("chat".equals(message.type) && message.chatText != null) {
+                chatMessages.add(new ChatMessage(message.playerId, message.chatText));
             } else if ("disconnect".equals(message.type)) {
                 connected = false;
                 close();

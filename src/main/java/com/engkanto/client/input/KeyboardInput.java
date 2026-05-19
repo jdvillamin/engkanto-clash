@@ -29,6 +29,14 @@ public final class KeyboardInput extends KeyAdapter {
     private boolean healRequested;
     private boolean switchCharacterRequested;
 
+    public void dispatch(KeyEvent e) {
+        if (e.getID() == KeyEvent.KEY_PRESSED) {
+            keyPressed(e);
+        } else if (e.getID() == KeyEvent.KEY_RELEASED) {
+            keyReleased(e);
+        }
+    }
+
     @Override
     public void keyPressed(KeyEvent event) {
         setKeyState(event.getKeyCode(), true);
