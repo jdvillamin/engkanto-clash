@@ -1,7 +1,9 @@
 package com.engkanto.client.game.entity;
 
+import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Composite;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
@@ -34,8 +36,9 @@ public final class TestDummy {
     private static final int   HEALTH_BAR_HEIGHT = 6;
     private static final int   HEALTH_BAR_OFFSET_Y = -10;
 
-    private static final double HIT_FLASH_DURATION = 0.12;  
-    private static final double RESPAWN_SECONDS     = 4.0; 
+    private static final double HIT_FLASH_DURATION = 0.12;
+    private static final double RESPAWN_SECONDS     = 4.0;
+    private static final double INVULNERABILITY_SECONDS = 3.0;
 
     private final double originX;
     private final double originY;
@@ -46,6 +49,7 @@ public final class TestDummy {
     private double hitFlashRemaining;
     private double respawnTimer;
     private boolean pendingRespawn;
+    private double invulnerabilityRemaining;
 
     public TestDummy(double x, double y) {
         this.originX = x;
@@ -85,6 +89,9 @@ public final class TestDummy {
         if (hitFlashRemaining > 0.0) {
             hitFlashRemaining = Math.max(0.0, hitFlashRemaining - deltaSeconds);
         }
+        if (invulnerabilityRemaining > 0.0) {
+            invulnerabilityRemaining = Math.max(0.0, invulnerabilityRemaining - deltaSeconds);
+        }
 
         if (pendingRespawn) {
             respawnTimer -= deltaSeconds;
@@ -97,8 +104,22 @@ public final class TestDummy {
     public void draw(Graphics2D graphics) {
         graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
+        Composite originalComposite = null;
+        if (invulnerabilityRemaining > 0.0) {
+            boolean dim = (System.currentTimeMillis() / 150) % 2 == 0;
+            if (dim) {
+                originalComposite = graphics.getComposite();
+                graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.3f));
+            }
+        }
+
         drawPole(graphics);
         drawBody(graphics);
+
+        if (originalComposite != null) {
+            graphics.setComposite(originalComposite);
+        }
+
         drawHealthBar(graphics);
         drawLabel(graphics);
         emitter.draw(graphics);
@@ -219,9 +240,14 @@ public final class TestDummy {
         graphics.drawString(label, drawX, drawY);
     }
 
+    public boolean isInvulnerable() {
+        return invulnerabilityRemaining > 0.0;
+    }
+
     private void respawn() {
         health.revive();
         pendingRespawn    = false;
         hitFlashRemaining = 0.0;
+        invulnerabilityRemaining = INVULNERABILITY_SECONDS;
     }
 }

@@ -205,7 +205,7 @@ public final class GamePanel extends JPanel implements Runnable {
     }
 
     private void resolvePlayerAttacks() {
-        if (player.isDead() || dummy.getHealthComponent().isDead()) {
+        if (player.isDead() || dummy.getHealthComponent().isDead() || dummy.isInvulnerable()) {
             resetDirectAttackTracking();
             return;
         }
@@ -271,6 +271,7 @@ public final class GamePanel extends JPanel implements Runnable {
     private void resolveProjectileHits() {
         for (Projectile projectile : player.getActiveCharacterProjectiles()) {
             if (!projectile.isActive()) continue;
+            if (dummy.getHealthComponent().isDead() || dummy.isInvulnerable()) continue;
             boolean overlaps = dummy.overlapsHitbox(
                     projectile.getX(),
                     projectile.getY(),
