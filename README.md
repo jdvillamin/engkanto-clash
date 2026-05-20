@@ -61,6 +61,21 @@ Force offline mode:
 ./gradlew runClient --args="--offline"
 ```
 
+## Multi-PC Setup
+
+1. Install Java 17 JDK on each machine if it is not installed yet.
+2. On the host PC, run:
+
+```bash
+./gradlew runServer
+```
+
+3. On each client PC, connect to the host PC's local IP address:
+
+```bash
+./gradlew runClient --args="--host=HOST_IP_ADDRESS --port=50137"
+```
+
 Run tests:
 
 ```bash
