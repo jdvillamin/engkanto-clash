@@ -1,3 +1,42 @@
+/*
+ * Key Objects / Libraries Used
+ *
+ * JPanel
+ * - Base Swing component that provides a surface for custom 2D rendering.
+ * - GamePanel extends JPanel and overrides paintComponent() to draw the game.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.desktop/javax/swing/JPanel.html
+ *
+ * Graphics2D
+ * - Provides methods for drawing shapes, images, and text on a component.
+ * - Used in all draw methods to render the game world, players, and UI.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.desktop/java/awt/Graphics2D.html
+ *
+ * KeyEvent
+ * - Represents a keyboard press, release, or type event.
+ * - Used to capture player input and chat keystrokes.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.desktop/java/awt/event/KeyEvent.html
+ *
+ * BufferedImage
+ * - An image stored in memory that can be drawn to or read from.
+ * - Used for the vine overlay image drawn on rooted test dummies.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.desktop/java/awt/image/BufferedImage.html
+ *
+ * AlphaComposite
+ * - Controls how pixels are blended when drawing on top of existing content.
+ * - Used for transparency effects like the vine overlay and chat fade-out.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.desktop/java/awt/AlphaComposite.html
+ *
+ * Iterator
+ * - Allows safe removal of elements while iterating a collection.
+ * - Used in resolveProjectileHits() to remove projectiles on contact.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/Iterator.html
+ *
+ * Thread
+ * - Allows code to run in the background.
+ * - Used to run the game loop on a separate thread from the Swing EDT.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/lang/Thread.html
+ */
+
 package com.engkanto.client.game;
 
 import java.awt.AWTEvent;
@@ -11,13 +50,18 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.event.KeyEvent;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import javax.swing.JPanel;
 
-import com.engkanto.client.audio.HitSoundEffect;
+import com.engkanto.client.audio.AudioCue;
+import com.engkanto.client.audio.AudioManager;
 import com.engkanto.client.game.character.EngkantoCharacter;
 import com.engkanto.client.game.character.PlayerAction;
 import com.engkanto.client.game.combat.AbilityUI;
@@ -26,6 +70,8 @@ import com.engkanto.client.game.entity.Player;
 import com.engkanto.client.game.entity.Projectile;
 import com.engkanto.client.game.entity.RemotePlayerRenderer;
 import com.engkanto.client.game.entity.TestDummy;
+import com.engkanto.client.render.AssetLoader;
+import com.engkanto.client.render.SpriteSheet;
 import com.engkanto.client.game.world.Platform;
 import com.engkanto.client.input.KeyboardInput;
 import com.engkanto.client.net.NetworkClient;
@@ -34,6 +80,8 @@ import com.engkanto.common.model.GameStateSnapshot;
 import com.engkanto.common.model.PlayerSnapshot;
 
 public final class GamePanel extends JPanel implements Runnable {
+    private static final String BACKGROUND_MAP_PATH = "/assets/maps/grassland.png";
+
     private static final int CHAT_X = 16;
     private static final int CHAT_Y = 420;
     private static final int CHAT_WIDTH = 320;
@@ -43,6 +91,15 @@ public final class GamePanel extends JPanel implements Runnable {
     private static final double CHAT_VISIBLE_SECONDS = 3.0;
     private static final Color CHAT_GOLD = new Color(245, 232, 184);
 
+    private static final String NETWORK_ACTION_IDLE = "IDLE";
+    private static final String NETWORK_ACTION_WALK = "WALK";
+    private static final String NETWORK_ACTION_JUMP = "JUMP";
+    private static final String NETWORK_ACTION_MOVE_1 = "MOVE_1";
+    private static final String NETWORK_ACTION_MOVE_2 = "MOVE_2";
+    private static final String NETWORK_ACTION_MOVE_3 = "MOVE_3";
+    private static final String NETWORK_ACTION_SPECIAL = "SPECIAL";
+
+    private final AudioManager audioManager;
     private final KeyboardInput keyboardInput;
     private final List<Platform> platforms;
     private final Player player;
@@ -50,9 +107,12 @@ public final class GamePanel extends JPanel implements Runnable {
     private final DebugRenderer debugRenderer;
     private final HealthUI healthUI;
     private final AbilityUI abilityUI;
+    private final BufferedImage backgroundImage;
     private final NetworkClient networkClient;
     private final RemotePlayerRenderer remotePlayerRenderer;
+    private final BufferedImage vineOverlayImage;
     private final StringBuilder chatInput = new StringBuilder();
+    private final Map<Integer, NetworkAudioState> networkAudioStates;
 
     private Thread gameThread;
     private boolean running;
@@ -64,11 +124,23 @@ public final class GamePanel extends JPanel implements Runnable {
     private int lastSeenMessageCount;
 
     public GamePanel() {
-        this(null);
+        this(null, AudioManager.getInstance());
     }
 
+    /*
+     * GamePanel(NetworkClient networkClient)
+     *
+     * - Initializes the game panel with input, platforms, player, dummy, and UI components.
+     * - Loads the vine overlay image from the Engkanto sprite sheet for drawing on rooted dummies.
+     * - Configures the JPanel for double-buffered rendering and keyboard focus.
+     */
     public GamePanel(NetworkClient networkClient) {
+        this(networkClient, AudioManager.getInstance());
+    }
+
+    public GamePanel(NetworkClient networkClient, AudioManager audioManager) {
         this.networkClient = networkClient;
+        this.audioManager = audioManager;
         keyboardInput = new KeyboardInput();
         platforms = createPlatforms();
         player = new Player(
@@ -80,7 +152,16 @@ public final class GamePanel extends JPanel implements Runnable {
         debugRenderer = new DebugRenderer();
         healthUI = new HealthUI(player);
         abilityUI = new AbilityUI(player);
+        backgroundImage = AssetLoader.loadImage(BACKGROUND_MAP_PATH);
         remotePlayerRenderer = new RemotePlayerRenderer();
+        networkAudioStates = new HashMap<>();
+
+        BufferedImage engkantoSheet = SpriteSheet.removeWhiteBackground(
+                AssetLoader.loadImage("/assets/sprites/engkanto.png"));
+        int frameWidth = engkantoSheet.getWidth() / 4;
+        int frameHeight = engkantoSheet.getHeight() / 7;
+        vineOverlayImage = engkantoSheet.getSubimage(
+                2 * frameWidth, 4 * frameHeight, frameWidth, frameHeight);
 
         setPreferredSize(new Dimension(GameConfig.SCREEN_WIDTH, GameConfig.SCREEN_HEIGHT));
         setBackground(new Color(28, 36, 32));
@@ -90,6 +171,11 @@ public final class GamePanel extends JPanel implements Runnable {
         enableEvents(AWTEvent.KEY_EVENT_MASK);
     }
 
+    /*
+     * start()
+     *
+     * - Starts the game loop thread if not already running.
+     */
     public synchronized void start() {
         if (running) {
             return;
@@ -101,6 +187,11 @@ public final class GamePanel extends JPanel implements Runnable {
         requestFocusInWindow();
     }
 
+    /*
+     * processKeyEvent(KeyEvent e)
+     *
+     * - Routes key events to chat handling and keyboard input.
+     */
     @Override
     protected void processKeyEvent(KeyEvent e) {
         if (e.getID() == KeyEvent.KEY_PRESSED) {
@@ -112,6 +203,12 @@ public final class GamePanel extends JPanel implements Runnable {
         super.processKeyEvent(e);
     }
 
+    /*
+     * run()
+     *
+     * - Main game loop using a fixed-timestep accumulator at 60 updates per second.
+     * - Calls update() for each accumulated tick and repaints the panel each iteration.
+     */
     @Override
     public void run() {
         final double secondsPerUpdate = 1.0 / GameConfig.TARGET_UPDATES_PER_SECOND;
@@ -135,27 +232,50 @@ public final class GamePanel extends JPanel implements Runnable {
         }
     }
 
+    /*
+     * update(double deltaSeconds)
+     *
+     * - In network mode, sends input to the server and updates remote player visuals.
+     * - In offline mode, updates the player and dummy, then resolves attacks, projectiles, and vines.
+     */
     private void update(double deltaSeconds) {
         if (isNetworkMode()) {
-            networkClient.sendInput(keyboardInput.consumeNetworkSnapshot(++inputSequence));
-            remotePlayerRenderer.update(deltaSeconds, networkClient.getLatestState());
+            GameStateSnapshot state = networkClient.getLatestState();
+            if (state == null || !state.gameOver) {
+                networkClient.sendInput(keyboardInput.consumeNetworkSnapshot(++inputSequence));
+            }
+            emitNetworkAudio(state);
+            remotePlayerRenderer.update(deltaSeconds, state);
             tickChatVisibility(deltaSeconds);
             return;
         }
 
+        PlayerAction previousAction = player.getCurrentAction();
+        String previousCharacterName = player.getCharacterName();
+        boolean wasOnGround = player.isOnGroundState();
+        boolean wasDead = player.isDead();
+
         if (keyboardInput.consumeDamageRequested()) {
             player.takeDamage(25.0);
+            audioManager.playSound(AudioCue.PLAYER_HURT);
         }
         if (keyboardInput.consumeHealRequested()) {
             player.heal(25.0);
+            audioManager.playSound(AudioCue.PLAYER_HEAL);
         }
         player.update(keyboardInput, platforms, deltaSeconds);
+        emitPlayerAudio(previousAction, previousCharacterName, wasOnGround, wasDead);
         dummy.update(deltaSeconds);
         resolvePlayerAttacks();
         resolveProjectileHits();
         resolveVineRoots();
     }
 
+    /*
+     * tickChatVisibility(double deltaSeconds)
+     *
+     * - Fades out the chat box over time and resets the timer when new messages arrive.
+     */
     private void tickChatVisibility(double deltaSeconds) {
         if (chatVisibleTimer > 0.0) {
             chatVisibleTimer = Math.max(0.0, chatVisibleTimer - deltaSeconds);
@@ -167,6 +287,12 @@ public final class GamePanel extends JPanel implements Runnable {
         }
     }
 
+    /*
+     * handleChatKey(KeyEvent e)
+     *
+     * - Handles Enter to toggle chat focus and send messages.
+     * - Handles Escape to cancel, Backspace to delete, and printable keys to type.
+     */
     private void handleChatKey(KeyEvent e) {
         if (!isNetworkMode()) return;
 
@@ -201,8 +327,136 @@ public final class GamePanel extends JPanel implements Runnable {
         }
     }
 
+    private void emitNetworkAudio(GameStateSnapshot state) {
+        if (state == null) {
+            return;
+        }
+
+        Map<Integer, NetworkAudioState> nextStates = new HashMap<>();
+        for (PlayerSnapshot snapshot : state.players) {
+            NetworkAudioState previous = networkAudioStates.get(snapshot.id);
+            if (previous != null) {
+                emitNetworkPlayerAudio(previous, snapshot);
+            }
+            nextStates.put(snapshot.id, new NetworkAudioState(snapshot));
+        }
+        networkAudioStates.clear();
+        networkAudioStates.putAll(nextStates);
+    }
+
+    private void emitNetworkPlayerAudio(NetworkAudioState previous, PlayerSnapshot current) {
+        boolean localPlayer = current.id == networkClient.getLocalPlayerId();
+        String currentAction = normalizeAction(current.action);
+        boolean actionChanged = !currentAction.equals(previous.action);
+
+        if (localPlayer && NETWORK_ACTION_WALK.equals(previous.action)
+                && !NETWORK_ACTION_WALK.equals(currentAction)) {
+            audioManager.stopLoopingSound(AudioCue.MOVE_START);
+        } else if (!localPlayer && actionChanged && NETWORK_ACTION_WALK.equals(currentAction)) {
+            audioManager.playSound(AudioCue.MOVE_START);
+        }
+        if (localPlayer && actionChanged && NETWORK_ACTION_WALK.equals(currentAction)) {
+            audioManager.playLoopingSound(AudioCue.MOVE_START);
+        }
+        if (actionChanged && NETWORK_ACTION_JUMP.equals(currentAction)) {
+            audioManager.playSound(AudioCue.JUMP);
+        }
+        if (NETWORK_ACTION_JUMP.equals(previous.action) && !NETWORK_ACTION_JUMP.equals(currentAction)) {
+            audioManager.playSound(AudioCue.LAND);
+        }
+        if (actionChanged) {
+            playNetworkActionSound(currentAction);
+        }
+        if (current.characterIndex != previous.characterIndex) {
+            audioManager.playSound(AudioCue.CHARACTER_SWITCH);
+        }
+        if (current.health < previous.health) {
+            audioManager.playSound(AudioCue.PLAYER_HURT);
+        }
+        if (current.health > previous.health) {
+            audioManager.playSound(AudioCue.PLAYER_HEAL);
+        }
+        if (!previous.dead && current.dead) {
+            audioManager.playSound(AudioCue.PLAYER_DEATH);
+        }
+    }
+
+    private void playNetworkActionSound(String action) {
+        switch (action) {
+            case NETWORK_ACTION_MOVE_1 -> audioManager.playSound(AudioCue.ATTACK_1);
+            case NETWORK_ACTION_MOVE_2 -> audioManager.playSound(AudioCue.ATTACK_2);
+            case NETWORK_ACTION_MOVE_3 -> audioManager.playSound(AudioCue.ATTACK_3);
+            case NETWORK_ACTION_SPECIAL -> audioManager.playSound(AudioCue.SPECIAL);
+            default -> {
+            }
+        }
+    }
+
+    private String normalizeAction(String action) {
+        return action == null ? NETWORK_ACTION_IDLE : action;
+    }
+
+    private void emitPlayerAudio(PlayerAction previousAction, String previousCharacterName,
+            boolean wasOnGround, boolean wasDead) {
+        PlayerAction currentAction = player.getCurrentAction();
+
+        if (previousAction == PlayerAction.WALK && currentAction != PlayerAction.WALK) {
+            audioManager.stopLoopingSound(AudioCue.MOVE_START);
+        }
+        if (currentAction == PlayerAction.WALK && previousAction != PlayerAction.WALK) {
+            audioManager.playLoopingSound(AudioCue.MOVE_START);
+        }
+        if (wasOnGround && !player.isOnGroundState()) {
+            audioManager.playSound(AudioCue.JUMP);
+        }
+        if (!wasOnGround && player.isOnGroundState()) {
+            audioManager.playSound(AudioCue.LAND);
+        }
+        if (currentAction != previousAction) {
+            playActionSound(currentAction);
+        }
+        if (!previousCharacterName.equals(player.getCharacterName())) {
+            audioManager.playSound(AudioCue.CHARACTER_SWITCH);
+        }
+        if (!wasDead && player.isDead()) {
+            audioManager.playSound(AudioCue.PLAYER_DEATH);
+        }
+    }
+
+    private void playActionSound(PlayerAction action) {
+        switch (action) {
+            case MOVE_1 -> audioManager.playSound(AudioCue.ATTACK_1);
+            case MOVE_2 -> audioManager.playSound(AudioCue.ATTACK_2);
+            case MOVE_3 -> audioManager.playSound(AudioCue.ATTACK_3);
+            case SPECIAL -> audioManager.playSound(AudioCue.SPECIAL);
+            default -> {
+            }
+        }
+    }
+
+    private static final class NetworkAudioState {
+        private final String action;
+        private final int characterIndex;
+        private final double health;
+        private final boolean dead;
+
+        private NetworkAudioState(PlayerSnapshot snapshot) {
+            this.action = snapshot.action == null ? NETWORK_ACTION_IDLE : snapshot.action;
+            this.characterIndex = snapshot.characterIndex;
+            this.health = snapshot.health;
+            this.dead = snapshot.dead;
+        }
+    }
+
+    /*
+     * resolvePlayerAttacks()
+     *
+     * - Checks if the player's current melee attack overlaps the test dummy.
+     * - Uses a one-hit-per-attack guard to prevent multi-frame damage.
+     * - Plays the hit sound effect when damage is applied.
+     */
     private void resolvePlayerAttacks() {
-        if (player.isDead() || dummy.getHealthComponent().isDead()) {
+        if (player.isDead() || dummy.getHealthComponent().isDead() || dummy.isInvulnerable()) {
             resetDirectAttackTracking();
             return;
         }
@@ -234,7 +488,7 @@ public final class GamePanel extends JPanel implements Runnable {
         if (overlaps) {
             directAttackHitApplied = player.applyActiveDirectAttack(dummy.getHealthComponent());
             if (directAttackHitApplied) {
-                HitSoundEffect.getInstance().play();
+                audioManager.playSound(AudioCue.PLAYER_HURT);
             }
         }
     }
@@ -251,6 +505,11 @@ public final class GamePanel extends JPanel implements Runnable {
         directAttackHitApplied = false;
     }
 
+    /*
+     * resolveVineRoots()
+     *
+     * - Checks each active vine for overlap with the dummy and applies root if it hits.
+     */
     private void resolveVineRoots() {
         for (EngkantoCharacter.Vine vine : player.getActiveCharacterVines()) {
             if (!vine.isActive() || !vine.canRoot()) {
@@ -261,13 +520,28 @@ public final class GamePanel extends JPanel implements Runnable {
             }
             if (vine.overlaps(dummy.getX(), dummy.getY(), TestDummy.HEIGHT)) {
                 vine.markRootApplied();
+                dummy.applyRoot(vine.getRootDuration());
             }
         }
     }
 
+    /*
+     * resolveProjectileHits()
+     *
+     * - Iterates all active projectiles and checks for overlap with the dummy.
+     * - Removes projectiles immediately on hit using Iterator, matching server behavior.
+     */
     private void resolveProjectileHits() {
-        for (Projectile projectile : player.getActiveCharacterProjectiles()) {
-            if (!projectile.isActive()) continue;
+        Iterator<Projectile> iter = player.getActiveCharacterProjectiles().iterator();
+        while (iter.hasNext()) {
+            Projectile projectile = iter.next();
+            if (!projectile.isActive()) {
+                iter.remove();
+                continue;
+            }
+            if (dummy.getHealthComponent().isDead() || dummy.isInvulnerable()) {
+                continue;
+            }
             boolean overlaps = dummy.overlapsHitbox(
                     projectile.getX(),
                     projectile.getY(),
@@ -276,11 +550,21 @@ public final class GamePanel extends JPanel implements Runnable {
             );
             if (overlaps) {
                 projectile.hit(dummy.getHealthComponent());
-                HitSoundEffect.getInstance().play();
+                if (!projectile.isActive()) {
+                    audioManager.playSound(AudioCue.PLAYER_HURT);
+                    iter.remove();
+                }
             }
         }
     }
 
+    /*
+     * paintComponent(Graphics graphics)
+     *
+     * - Draws the world background and platforms for both modes.
+     * - In network mode, renders remote players, effects, HUD, timer, leaderboard, and chat.
+     * - In offline mode, renders the local player, dummy, vine overlay, health bar, and ability UI.
+     */
     @Override
     protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
@@ -293,19 +577,34 @@ public final class GamePanel extends JPanel implements Runnable {
                 GameStateSnapshot state = networkClient.getLatestState();
                 drawNetworkPlayers(graphics2D, state);
                 remotePlayerRenderer.drawEffects(graphics2D);
+                if (state != null) {
+                    drawNetworkTimer(graphics2D, state);
+                }
                 PlayerSnapshot localPlayer = findLocalPlayer(state);
                 if (localPlayer != null) {
                     drawNetworkHud(graphics2D, localPlayer);
                     drawNetworkAbilityUI(graphics2D, localPlayer);
                 }
-                drawTabHint(graphics2D);
-                drawChat(graphics2D);
-                if (keyboardInput.isTabPressed() && state != null) {
+                if (state != null && state.gameOver) {
+                    drawResultsOverlay(graphics2D, state);
+                } else if (state != null && keyboardInput.isTabPressed()) {
                     drawLeaderboard(graphics2D, state);
+                } else {
+                    drawTabHint(graphics2D);
+                    drawChat(graphics2D);
                 }
             } else {
                 player.draw(graphics2D);
                 dummy.draw(graphics2D);
+                if (dummy.isRooted()) {
+                    Composite prevComposite = graphics2D.getComposite();
+                    graphics2D.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.7f));
+                    int vineX = (int) dummy.getX() + TestDummy.WIDTH / 2 - TestDummy.HEIGHT / 2;
+                    int vineY = (int) dummy.getY();
+                    graphics2D.drawImage(vineOverlayImage, vineX, vineY,
+                            TestDummy.HEIGHT, TestDummy.HEIGHT, null);
+                    graphics2D.setComposite(prevComposite);
+                }
                 healthUI.draw(graphics2D);
                 abilityUI.draw(graphics2D);
                 debugRenderer.drawHud(graphics2D);
@@ -315,6 +614,13 @@ public final class GamePanel extends JPanel implements Runnable {
         }
     }
 
+    /*
+     * drawChat(Graphics2D g)
+     *
+     * - Draws the chat message history and input box with fade-out transparency.
+     * - Shows recent messages in the chat window and a text cursor when focused.
+     * - Only visible when the chat is focused or the visibility timer is active.
+     */
     private void drawChat(Graphics2D g) {
         boolean visible = chatFocused || chatVisibleTimer > 0.0;
         if (!visible) return;
@@ -363,6 +669,11 @@ public final class GamePanel extends JPanel implements Runnable {
         return networkClient != null && networkClient.isConnected();
     }
 
+    /*
+     * drawNetworkPlayers(Graphics2D graphics, GameStateSnapshot state)
+     *
+     * - Renders all players from the latest server snapshot using RemotePlayerRenderer.
+     */
     private void drawNetworkPlayers(Graphics2D graphics, GameStateSnapshot state) {
         if (state == null) {
             graphics.setColor(Color.WHITE);
@@ -376,6 +687,11 @@ public final class GamePanel extends JPanel implements Runnable {
         }
     }
 
+    /*
+     * findLocalPlayer(GameStateSnapshot state)
+     *
+     * - Finds this client's own player in the server snapshot by matching IDs.
+     */
     private PlayerSnapshot findLocalPlayer(GameStateSnapshot state) {
         if (state == null) {
             return null;
@@ -389,6 +705,39 @@ public final class GamePanel extends JPanel implements Runnable {
         return null;
     }
 
+    /*
+     * drawNetworkTimer(Graphics2D graphics, GameStateSnapshot state)
+     *
+     * - Draws the centered match countdown timer, turning red in the last 10 seconds.
+     */
+    private void drawNetworkTimer(Graphics2D graphics, GameStateSnapshot state) {
+        String timeText = formatTimer(state.secondsRemaining);
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 24));
+        FontMetrics fm = graphics.getFontMetrics();
+        int boxW = fm.stringWidth(timeText) + 42;
+        int boxH = 38;
+        int boxX = (GameConfig.SCREEN_WIDTH - boxW) / 2;
+        int boxY = 12;
+
+        Object prevAA = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        graphics.setColor(new Color(0, 0, 0, 150));
+        graphics.fillRoundRect(boxX, boxY, boxW, boxH, 10, 10);
+        graphics.setColor(state.secondsRemaining <= 10.0 ? new Color(255, 120, 100) : new Color(245, 232, 184));
+        graphics.drawString(timeText, boxX + (boxW - fm.stringWidth(timeText)) / 2, boxY + 27);
+
+        if (prevAA != null) {
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, prevAA);
+        }
+    }
+
+    /*
+     * drawNetworkHud(Graphics2D graphics, PlayerSnapshot localPlayer)
+     *
+     * - Draws the player name label and color-coded health bar in the top-left corner.
+     * - Health bar color changes based on percentage: green, yellow, red, or grey when dead.
+     */
     private void drawNetworkHud(Graphics2D graphics, PlayerSnapshot localPlayer) {
         graphics.setColor(new Color(0, 0, 0, 140));
         graphics.fillRoundRect(16, 12, 280, 26, 8, 8);
@@ -420,6 +769,12 @@ public final class GamePanel extends JPanel implements Runnable {
         graphics.drawString(hpText, barX + barW + 8, barY + 14);
     }
 
+    /*
+     * drawNetworkAbilityUI(Graphics2D graphics, PlayerSnapshot localPlayer)
+     *
+     * - Draws the four ability key indicators (J, K, E, L) centered at the bottom of the screen.
+     * - Each key shows its cooldown state using drawAbilityKey().
+     */
     private void drawNetworkAbilityUI(Graphics2D graphics, PlayerSnapshot localPlayer) {
         int keySize = 46;
         int gap = 10;
@@ -444,6 +799,13 @@ public final class GamePanel extends JPanel implements Runnable {
         }
     }
 
+    /*
+     * drawAbilityKey(Graphics2D graphics, int x, int y, String label, int keySize, double remaining, double duration)
+     *
+     * - Draws a single ability key with its label.
+     * - Shows a darkened overlay and fill-up animation with a timer when on cooldown.
+     * - Dims the key label color while the ability is unavailable.
+     */
     private void drawAbilityKey(Graphics2D graphics, int x, int y, String label,
             int keySize, double remaining, double duration) {
         double fraction = duration <= 0.0 ? 0.0 : Math.max(0.0, Math.min(1.0, remaining / duration));
@@ -476,6 +838,11 @@ public final class GamePanel extends JPanel implements Runnable {
         graphics.drawString(label, tx, ty);
     }
 
+    /*
+     * drawTabHint(Graphics2D graphics)
+     *
+     * - Draws a small "TAB — Leaderboard" hint at the bottom of the screen.
+     */
     private void drawTabHint(Graphics2D graphics) {
         Object prevAA = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
         graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -497,6 +864,13 @@ public final class GamePanel extends JPanel implements Runnable {
         }
     }
 
+    /*
+     * drawLeaderboard(Graphics2D graphics, GameStateSnapshot state)
+     *
+     * - Draws a fullscreen overlay with a centered leaderboard panel.
+     * - Sorts players by kills and displays rank, name, character, and kill count.
+     * - Highlights the local player's row.
+     */
     private void drawLeaderboard(Graphics2D graphics, GameStateSnapshot state) {
         Object prevAA = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
         graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -569,17 +943,119 @@ public final class GamePanel extends JPanel implements Runnable {
         }
     }
 
-    private void drawWorld(Graphics2D graphics) {
-        graphics.setColor(new Color(42, 92, 76));
-        graphics.fillRect(0, 0, getWidth(), getHeight());
+    /*
+     * drawResultsOverlay(Graphics2D graphics, GameStateSnapshot state)
+     *
+     * - Draws the game-over results screen with a centered panel.
+     * - Shows the winner at the top and all players sorted by kills.
+     * - Highlights the 1st place row in gold and the local player's row in blue.
+     */
+    private void drawResultsOverlay(Graphics2D graphics, GameStateSnapshot state) {
+        Object prevAA = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        graphics.setColor(new Color(34, 74, 62));
-        for (int x = 0; x < getWidth(); x += GameConfig.TILE_SIZE) {
-            graphics.drawLine(x, 0, x, getHeight());
+        graphics.setColor(new Color(0, 0, 0, 190));
+        graphics.fillRect(0, 0, GameConfig.SCREEN_WIDTH, GameConfig.SCREEN_HEIGHT);
+
+        List<PlayerSnapshot> sorted = sortedByKills(state);
+        int panelW = 560;
+        int headerH = 92;
+        int rowH = 42;
+        int panelH = headerH + sorted.size() * rowH + 34;
+        int panelX = (GameConfig.SCREEN_WIDTH - panelW) / 2;
+        int panelY = (GameConfig.SCREEN_HEIGHT - panelH) / 2;
+
+        graphics.setColor(new Color(30, 38, 34, 245));
+        graphics.fillRoundRect(panelX, panelY, panelW, panelH, 18, 18);
+        graphics.setColor(new Color(218, 186, 104));
+        graphics.drawRoundRect(panelX, panelY, panelW, panelH, 18, 18);
+        graphics.drawRoundRect(panelX + 1, panelY + 1, panelW - 2, panelH - 2, 16, 16);
+
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 30));
+        graphics.setColor(new Color(245, 232, 184));
+        FontMetrics titleFm = graphics.getFontMetrics();
+        String title = "RESULTS";
+        graphics.drawString(title, panelX + (panelW - titleFm.stringWidth(title)) / 2, panelY + 42);
+
+        String firstText = sorted.isEmpty() ? "No players" : "1st: Player " + sorted.get(0).id;
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+        FontMetrics firstFm = graphics.getFontMetrics();
+        graphics.setColor(Color.WHITE);
+        graphics.drawString(firstText, panelX + (panelW - firstFm.stringWidth(firstText)) / 2, panelY + 70);
+
+        int colRank = panelX + 30;
+        int colName = panelX + 86;
+        int colChar = panelX + 260;
+        int colKills = panelX + 470;
+        int rowTop = panelY + headerH;
+
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        graphics.setColor(new Color(180, 180, 180));
+        graphics.drawString("RANK", colRank, rowTop - 10);
+        graphics.drawString("PLAYER", colName, rowTop - 10);
+        graphics.drawString("CHARACTER", colChar, rowTop - 10);
+        graphics.drawString("KILLS", colKills, rowTop - 10);
+
+        int localId = networkClient.getLocalPlayerId();
+        for (int i = 0; i < sorted.size(); i++) {
+            PlayerSnapshot player = sorted.get(i);
+            int y = rowTop + i * rowH;
+            boolean isLocal = player.id == localId;
+
+            if (i == 0) {
+                graphics.setColor(new Color(218, 186, 104, 55));
+                graphics.fillRoundRect(panelX + 14, y - 6, panelW - 28, rowH - 4, 8, 8);
+            } else if (isLocal) {
+                graphics.setColor(new Color(145, 231, 255, 35));
+                graphics.fillRoundRect(panelX + 14, y - 6, panelW - 28, rowH - 4, 8, 8);
+            }
+
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 15));
+            graphics.setColor(i == 0 ? new Color(245, 232, 184) : (isLocal ? new Color(145, 231, 255) : Color.WHITE));
+            graphics.drawString(rankLabel(i + 1), colRank, y + 20);
+            graphics.drawString("Player " + player.id, colName, y + 20);
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 15));
+            graphics.drawString(player.characterName, colChar, y + 20);
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
+            graphics.setColor(new Color(83, 218, 112));
+            graphics.drawString(String.valueOf(player.kills), colKills, y + 20);
         }
-        for (int y = 0; y < getHeight(); y += GameConfig.TILE_SIZE) {
-            graphics.drawLine(0, y, getWidth(), y);
+
+        if (prevAA != null) {
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, prevAA);
         }
+    }
+
+    private List<PlayerSnapshot> sortedByKills(GameStateSnapshot state) {
+        List<PlayerSnapshot> sorted = new ArrayList<>(state.players);
+        sorted.sort(Comparator.comparingInt((PlayerSnapshot p) -> p.kills).reversed()
+                .thenComparingInt(p -> p.id));
+        return sorted;
+    }
+
+    private String rankLabel(int rank) {
+        return switch (rank) {
+            case 1 -> "1st";
+            case 2 -> "2nd";
+            case 3 -> "3rd";
+            default -> rank + "th";
+        };
+    }
+
+    private String formatTimer(double secondsRemaining) {
+        int totalSeconds = (int) Math.ceil(Math.max(0.0, secondsRemaining));
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+        return String.format("%d:%02d", minutes, seconds);
+    }
+
+    /*
+     * drawWorld(Graphics2D graphics)
+     *
+     * - Draws the background color and tile grid lines.
+     */
+    private void drawWorld(Graphics2D graphics) {
+        graphics.drawImage(backgroundImage, 0, 0, getWidth(), getHeight(), null);
     }
 
     private void drawPlatforms(Graphics2D graphics) {
@@ -588,6 +1064,12 @@ public final class GamePanel extends JPanel implements Runnable {
         }
     }
 
+    /*
+     * createPlatforms()
+     *
+     * - Creates the client-side platform layout with one ground and six floating platforms.
+     * - Must stay in sync with the server-side layout in GameServer.
+     */
     private List<Platform> createPlatforms() {
         List<Platform> mapPlatforms = new ArrayList<>();
         mapPlatforms.add(new Platform(0, GameConfig.SCREEN_HEIGHT - 96, GameConfig.SCREEN_WIDTH, 96, Platform.Type.GROUND));

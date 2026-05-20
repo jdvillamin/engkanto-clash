@@ -33,6 +33,8 @@ public final class RemotePlayerRenderer {
     private static final int HEALTH_BAR_HEIGHT = 8;
     private static final float HIT_FLASH_ALPHA = 0.35f;
     private static final Color HIT_FLASH_COLOR = new Color(255, 50, 50);
+    private static final float HEAL_FLASH_ALPHA = 0.35f;
+    private static final Color HEAL_FLASH_COLOR = new Color(70, 230, 95);
 
     private final CharacterDefinition[] characters = {
             new TikbalangCharacter(),
@@ -137,7 +139,10 @@ public final class RemotePlayerRenderer {
         }
 
         if (player.hitFlashSecondsRemaining > 0.0 && !player.dead) {
-            drawHitFlashOverlay(graphics, frame, drawX, drawY, player.facingLeft);
+            drawSpriteOverlay(graphics, frame, drawX, drawY, player.facingLeft, HIT_FLASH_COLOR, HIT_FLASH_ALPHA);
+        }
+        if (isAswangHealing(player, action)) {
+            drawSpriteOverlay(graphics, frame, drawX, drawY, player.facingLeft, HEAL_FLASH_COLOR, HEAL_FLASH_ALPHA);
         }
 
         if (player.rootedSecondsRemaining > 0.0) {
@@ -283,13 +288,18 @@ public final class RemotePlayerRenderer {
         }
     }
 
-    private void drawHitFlashOverlay(Graphics2D graphics, BufferedImage frame, int drawX, int drawY, boolean facingLeft) {
+    private boolean isAswangHealing(PlayerSnapshot player, PlayerAction action) {
+        return !player.dead && player.characterIndex == 2 && action == PlayerAction.MOVE_3;
+    }
+
+    private void drawSpriteOverlay(Graphics2D graphics, BufferedImage frame, int drawX, int drawY,
+            boolean facingLeft, Color color, float alpha) {
         BufferedImage overlay = new BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_ARGB);
         Graphics2D overlayGraphics = overlay.createGraphics();
         try {
             drawSpriteFrame(overlayGraphics, frame, 0, 0, facingLeft);
-            overlayGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_IN, HIT_FLASH_ALPHA));
-            overlayGraphics.setColor(HIT_FLASH_COLOR);
+            overlayGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_IN, alpha));
+            overlayGraphics.setColor(color);
             overlayGraphics.fillRect(0, 0, SIZE, SIZE);
         } finally {
             overlayGraphics.dispose();

@@ -1,3 +1,27 @@
+/*
+ * Key Objects / Libraries Used
+ *
+ * PlayerInputSnapshot
+ * - DTO containing the client's keyboard state for one tick.
+ * - Received from the client via GameServer and applied with setInput().
+ * - Reference: see com.engkanto.common.model.PlayerInputSnapshot
+ *
+ * PlayerSnapshot
+ * - DTO sent to all clients each tick so they can render this player.
+ * - Built by toSnapshot() from the player's current state.
+ * - Reference: see com.engkanto.common.model.PlayerSnapshot
+ *
+ * Iterator
+ * - Allows safe removal of elements while iterating a collection.
+ * - Used in tickPoisons() to remove expired poison effects mid-loop.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/Iterator.html
+ *
+ * ArrayList / List
+ * - Standard resizable list implementation.
+ * - Used to store active PoisonEffect instances on this player.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/ArrayList.html
+ */
+
 package com.engkanto.server.game;
 
 import java.util.ArrayList;
@@ -92,6 +116,11 @@ final class ServerPlayer {
         }
     }
 
+    /*
+     * update(double deltaSeconds, List<ServerPlatform> platforms)
+     *
+     * - Main per-tick update: handles input, movement, abilities, physics, and animation.
+     */
     void update(double deltaSeconds, List<ServerPlatform> platforms) {
         if (isDead()) {
             updateDeath(deltaSeconds);
@@ -146,10 +175,20 @@ final class ServerPlayer {
         keepInsideScreen();
     }
 
+    /*
+     * hasAttackReady()
+     *
+     * - Returns true if an attack is pending and enough time has passed for impact.
+     */
     boolean hasAttackReady() {
         return attackPending && actionElapsedSeconds >= ATTACK_IMPACT_SECONDS;
     }
 
+    /*
+     * canHit(ServerPlayer target)
+     *
+     * - Checks if this player's pending attack overlaps the target.
+     */
     boolean canHit(ServerPlayer target) {
         if (target == this || target.isDead() || target.isInvulnerable()) {
             return false;
@@ -169,6 +208,11 @@ final class ServerPlayer {
         pendingPoison = false;
     }
 
+    /*
+     * takeDamage(double damage)
+     *
+     * - Reduces health by damage. Returns true if the player died.
+     */
     boolean takeDamage(double damage) {
         if (damage <= 0.0 || isDead() || isInvulnerable()) {
             return false;
@@ -194,6 +238,11 @@ final class ServerPlayer {
         return pendingDamage;
     }
 
+    /*
+     * toSnapshot()
+     *
+     * - Builds a PlayerSnapshot from the current state to send to all clients.
+     */
     PlayerSnapshot toSnapshot() {
         PlayerSnapshot snapshot = new PlayerSnapshot();
         snapshot.id = id;
@@ -222,6 +271,11 @@ final class ServerPlayer {
         return snapshot;
     }
 
+    /*
+     * updateDeath(double deltaSeconds)
+     *
+     * - Ticks the death animation and respawn timer, clears active effects.
+     */
     private void updateDeath(double deltaSeconds) {
         updateAnimation(deltaSeconds);
         dashVelocity = 0.0;
@@ -238,6 +292,11 @@ final class ServerPlayer {
         return isDead() && respawnTimerRemaining <= 0.0;
     }
 
+    /*
+     * respawnAt(double newX, double newY, double newGroundY)
+     *
+     * - Resets health, position, and state, then grants invulnerability.
+     */
     void respawnAt(double newX, double newY, double newGroundY) {
         x = newX;
         y = newY;
@@ -266,6 +325,11 @@ final class ServerPlayer {
         }
     }
 
+    /*
+     * switchCharacterIfRequested()
+     *
+     * - Cycles to the next character and resets cooldowns/dash state.
+     */
     private void switchCharacterIfRequested() {
         if (!input.switchCharacterRequested || actionLocked) {
             return;
@@ -281,6 +345,11 @@ final class ServerPlayer {
         specialDashPending = false;
     }
 
+    /*
+     * consumeRequestedAction()
+     *
+     * - Returns the highest-priority ability that the player requested and is off cooldown.
+     */
     private String consumeRequestedAction() {
         if (actionLocked) {
             return null;
@@ -308,6 +377,11 @@ final class ServerPlayer {
         return null;
     }
 
+    /*
+     * startLockedAction(String nextAction)
+     *
+     * - Begins a locked ability animation and sets up its side effects (damage, dash, heal, vine).
+     */
     private void startLockedAction(String nextAction) {
         playOnce(nextAction);
         pendingDamage = getDamageFor(nextAction);
@@ -339,6 +413,11 @@ final class ServerPlayer {
                 || "SPECIAL".equals(nextAction));
     }
 
+    /*
+     * getDamageFor(String nextAction)
+     *
+     * - Returns the damage value for a given move based on the current character.
+     */
     private double getDamageFor(String nextAction) {
         return switch (characterIndex) {
             case 0 -> switch (nextAction) {
@@ -370,6 +449,11 @@ final class ServerPlayer {
         };
     }
 
+    /*
+     * getCooldown(String nextAction)
+     *
+     * - Returns the cooldown duration for a given move based on the current character.
+     */
     private double getCooldown(String nextAction) {
         return switch (nextAction) {
             case "MOVE_1" -> characterIndex == 3 ? 0.25 : 0.30;
@@ -390,6 +474,11 @@ final class ServerPlayer {
         return "IDLE";
     }
 
+    /*
+     * updateJump(double deltaSeconds)
+     *
+     * - Applies gravity and vertical movement; handles Aswang glide.
+     */
     private void updateJump(double deltaSeconds) {
         if (landingFrameRemaining > 0.0) {
             landingFrameRemaining = Math.max(0.0, landingFrameRemaining - deltaSeconds);
@@ -416,6 +505,11 @@ final class ServerPlayer {
         return characterIndex == 2 && input.glidePressed && verticalVelocity > 0.0;
     }
 
+    /*
+     * dropThroughPlatformIfRequested(List<ServerPlatform> platforms)
+     *
+     * - Drops the player through a floating platform if down is pressed.
+     */
     private void dropThroughPlatformIfRequested(List<ServerPlatform> platforms) {
         if (!input.downPressed || verticalVelocity != 0.0) {
             return;
@@ -429,6 +523,11 @@ final class ServerPlayer {
         verticalVelocity = 1.0;
     }
 
+    /*
+     * landOnPlatformIfFalling(List<ServerPlatform> platforms, double previousBottom, boolean dropRequested)
+     *
+     * - Detects when the player lands on a platform and snaps them to it.
+     */
     private void landOnPlatformIfFalling(List<ServerPlatform> platforms, double previousBottom, boolean dropRequested) {
         ServerPlatform standingPlatform = findStandingPlatform(platforms, dropRequested);
         if (standingPlatform != null && verticalVelocity == 0.0) {
@@ -478,6 +577,11 @@ final class ServerPlayer {
         return feetOnTop && overlapsHorizontally;
     }
 
+    /*
+     * overlapsMeleeAttack(ServerPlayer target)
+     *
+     * - Checks if the target is within this player's melee hitbox.
+     */
     private boolean overlapsMeleeAttack(ServerPlayer target) {
         double attackLeft = facingLeft ? x - 48.0 : x;
         double attackRight = facingLeft ? x + SIZE : x + SIZE + 48.0;
@@ -487,6 +591,11 @@ final class ServerPlayer {
                 && y < target.getBottom();
     }
 
+    /*
+     * overlapsRangedAttack(ServerPlayer target)
+     *
+     * - Checks if the target is within a forward cone for ranged attacks.
+     */
     private boolean overlapsRangedAttack(ServerPlayer target) {
         double attackerCenterX = x + SIZE / 2.0;
         double targetCenterX = target.x + SIZE / 2.0;
@@ -497,6 +606,11 @@ final class ServerPlayer {
         return horizontalDistance >= 0.0 && horizontalDistance <= 360.0 && verticalDistance <= 120.0;
     }
 
+    /*
+     * updateAnimation(double deltaSeconds)
+     *
+     * - Advances the animation frame timer and calls advanceFrame when a frame completes.
+     */
     private void updateAnimation(double deltaSeconds) {
         if (actionLocked) {
             actionElapsedSeconds += deltaSeconds;
@@ -511,6 +625,11 @@ final class ServerPlayer {
         }
     }
 
+    /*
+     * updateJumpFrame()
+     *
+     * - Sets the jump animation frame based on vertical velocity and takeoff/landing state.
+     */
     private void updateJumpFrame() {
         if (!"JUMP".equals(action) || actionLocked) {
             return;
@@ -530,6 +649,11 @@ final class ServerPlayer {
         }
     }
 
+    /*
+     * updateDash(double deltaSeconds)
+     *
+     * - Handles Tikbalang dash velocity for MOVE_3 and SPECIAL, decays over time.
+     */
     private void updateDash(double deltaSeconds) {
         if (characterIndex != 0) {
             dashVelocity = 0.0;
@@ -562,6 +686,11 @@ final class ServerPlayer {
         }
     }
 
+    /*
+     * advanceFrame()
+     *
+     * - Moves to the next frame; loops WALK, holds DEATH at last frame, ends other locked actions.
+     */
     private void advanceFrame() {
         if (frameIndex < frameCount(action) - 1) {
             frameIndex++;
@@ -579,6 +708,11 @@ final class ServerPlayer {
         }
     }
 
+    /*
+     * play(String nextAction)
+     *
+     * - Switches to a new animation if not already playing it.
+     */
     private void play(String nextAction) {
         if (action.equals(nextAction)) {
             return;
@@ -590,6 +724,11 @@ final class ServerPlayer {
         actionLocked = false;
     }
 
+    /*
+     * playOnce(String nextAction)
+     *
+     * - Starts a one-shot locked animation (used for abilities and death).
+     */
     private void playOnce(String nextAction) {
         action = nextAction;
         frameIndex = 0;
@@ -676,6 +815,11 @@ final class ServerPlayer {
         vineRootPending = false;
     }
 
+    /*
+     * overlapsVineRoot(ServerPlayer target)
+     *
+     * - Checks if the vine root hitbox (placed in front of the caster) overlaps the target.
+     */
     boolean overlapsVineRoot(ServerPlayer target) {
         double vineX = facingLeft ? x - VINE_ROOT_SIZE : x + SIZE;
         double vineRight = vineX + VINE_ROOT_SIZE;
@@ -699,11 +843,21 @@ final class ServerPlayer {
         return pendingPoison;
     }
 
+    /*
+     * applyPoison(int ownerId)
+     *
+     * - Adds a new poison effect that deals periodic damage over time.
+     */
     void applyPoison(int ownerId) {
         poisonEffects.add(new PoisonEffect(ownerId, POISON_DAMAGE_PER_TICK,
                 POISON_TICK_INTERVAL, POISON_DURATION));
     }
 
+    /*
+     * tickPoisons(double deltaSeconds)
+     *
+     * - Ticks all active poisons, applying damage per interval. Returns the killer's ID if poison kills.
+     */
     int tickPoisons(double deltaSeconds) {
         int killerOwnerId = -1;
         Iterator<PoisonEffect> iter = poisonEffects.iterator();
@@ -754,6 +908,11 @@ final class ServerPlayer {
         return y;
     }
 
+    /*
+     * createProjectile()
+     *
+     * - Creates a ServerProjectile based on the current character's attack and facing direction.
+     */
     ServerProjectile createProjectile() {
         int dir = facingLeft ? -1 : 1;
         int projSize;
@@ -795,6 +954,11 @@ final class ServerPlayer {
         return Math.max(min, Math.min(value, max));
     }
 
+    /*
+     * PoisonEffect
+     *
+     * - Tracks a single poison instance: owner, damage per tick, interval, and remaining duration.
+     */
     private static final class PoisonEffect {
         final int ownerId;
         final double damagePerTick;

@@ -1,76 +1,61 @@
 # Engkanto Clash
 
-Engkanto Clash is a Java 17 / Swing 2D game project for CMSC 137. The current
-implementation is a local playable combat prototype with character switching,
-sprite animations, platform movement, health and damage systems, projectiles,
-cooldowns, and a test dummy target.
+Engkanto Clash is a Java 17 Swing game for CMSC 137. It is a 2D arena combat
+game with Filipino mythical creatures as playable characters.
 
-Milestone 2 socket integration is now underway. The Swing client can connect to
-a Java TCP server, send keyboard input snapshots, and render the authoritative
-player snapshots broadcast by the server. If no server is available, the client
-falls back to the local single-player prototype.
+The game can run in local mode or connect to a Java TCP server for multiplayer.
+If no server is available, the client automatically runs the local version.
 
-## Current Features
+## Features
 
-- Java Swing desktop client and Java2D rendering
-- 60 updates-per-second game loop
-- four playable character sprites: Tikbalang, Kapre, Aswang, and Engkanto
-- movement, jumping, Aswang glide, and drop-through floating platforms
-- wide `1280x704` arena with tiled platforms
-- health, damage, healing, death, revive, and poison status behavior
-- direct attack and projectile hit resolution against a test dummy
-- one-hit-per-attack and one-hit-per-projectile damage guards
-- player health UI
-- `J`, `K`, `E`, and `L` cooldown key UI
-- Java TCP socket server for up to four multiplayer clients
-- JSON client input and server game-state messages
-- authoritative server movement, respawn, and basic player-vs-player hit
-  resolution
-- JUnit tests for core health behavior
+- 2D Java Swing and Java2D gameplay
+- four characters: Tikbalang, Kapre, Aswang, and Engkanto
+- movement, jumping, platforms, and Aswang glide
+- attacks, projectiles, cooldowns, health, damage, healing, and poison
+- test dummy for local combat testing
+- basic multiplayer through a TCP server
+- JSON messages for client input and server game state
+- JUnit tests for health behavior
 
-## Technology Stack
+## Tech Used
 
-- Java 17
-- Gradle
-- Java Swing and Java2D
-- custom `BufferedImage` sprite and tile rendering helpers
-- JUnit 5
-- Gson dependency reserved for future JSON/network work
+- Java 17: main programming language for the client and server
+- Gradle: build, run, dependency, and test management
+- Java Swing: desktop window, panels, and keyboard input handling
+- Java2D: sprite, platform, projectile, HUD, lobby, and text rendering
+- Java TCP sockets: multiplayer client-server communication
+- Gson: JSON serialization and deserialization for network messages
+- JUnit 5: automated tests for health and combat behavior
+- JLayer: MP3 decoding for background music
+- Java Sound API: audio playback for music and hit sound effects
 
-## Running The Project
+## How To Run
 
-Build the project:
+Build:
 
 ```bash
 ./gradlew build
 ```
 
-Run a local client:
+Run the client:
 
 ```bash
 ./gradlew runClient
 ```
 
-Run a multiplayer server:
+Run the server:
 
 ```bash
 ./gradlew runServer
 ```
 
-Then launch one or more clients. By default, clients try
-`127.0.0.1:50137` and fall back to local mode if the server is unavailable:
-
-```bash
-./gradlew runClient
-```
-
-Use explicit client options when connecting to another machine:
+Clients connect to `127.0.0.1:50137` by default. To connect to another machine:
 
 ```bash
 ./gradlew runClient --args="--host=192.168.1.20 --port=50137"
 ```
 
-Force local mode:
+Force offline mode:
 
 ```bash
 ./gradlew runClient --args="--offline"
@@ -84,7 +69,8 @@ Run tests:
 
 On Windows PowerShell, use `.\gradlew.bat` instead of `./gradlew`.
 
-## Documentation
+## Docs
 
 - [Gameplay Reference](docs/gameplay.md)
+- [LAN Multiplayer Setup](docs/lan-setup.md)
 - [System Architecture](docs/system-architecture.md)

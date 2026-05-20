@@ -1,9 +1,13 @@
 package com.engkanto.client.game.entity;
 
+import java.awt.AlphaComposite;
+import java.awt.Color;
+import java.awt.Composite;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.List;
 
+import com.engkanto.client.audio.HitSoundEffect;
 import com.engkanto.client.game.GameConfig;
 import com.engkanto.client.game.character.AswangCharacter;
 import com.engkanto.client.game.character.CharacterDefinition;
@@ -31,6 +35,13 @@ public final class Player {
     private static final double SPECIAL_COOLDOWN_SECONDS = 12.00;
     private static final double JUMP_TAKEOFF_FRAME_SECONDS = 0.10;
     private static final double LANDING_FRAME_SECONDS = 0.16;
+    private static final double HIT_FLASH_SECONDS = 0.15;
+    private static final double INVULNERABILITY_SECONDS = 3.0;
+    private static final float HIT_FLASH_ALPHA = 0.35f;
+    private static final Color HIT_FLASH_COLOR = new Color(255, 50, 50);
+    private static final double HEAL_FLASH_SECONDS = 0.25;
+    private static final float HEAL_FLASH_ALPHA = 0.35f;
+    private static final Color HEAL_FLASH_COLOR = new Color(70, 230, 95);
 
     private final CharacterDefinition[] characters;
     private final SpriteAnimator animator;
@@ -52,6 +63,9 @@ public final class Player {
 
     private double respawnTimerRemaining;
     private double rootedSecondsRemaining;
+    private double hitFlashSecondsRemaining;
+    private double healFlashSecondsRemaining;
+    private double invulnerabilityRemaining;
     private static final double RESPAWN_SECONDS = 1.0;
 
     public Player(double x, double y) {
@@ -71,22 +85,29 @@ public final class Player {
         health.addListener(new HealthListener() {
             @Override
             public void onDamage(double damage) {
-
+                hitFlashSecondsRemaining = HIT_FLASH_SECONDS;
+                HitSoundEffect.getInstance().play();
             }
-            
+
             @Override
             public void onHeal(double amount) {
+                healFlashSecondsRemaining = HEAL_FLASH_SECONDS;
             }
-            
+
             @Override
             public void onDeath() {
                 animator.playOnce(PlayerAction.DEATH);
                 respawnTimerRemaining = RESPAWN_SECONDS;
+                hitFlashSecondsRemaining = 0.0;
+                invulnerabilityRemaining = 0.0;
             }
         });
     }
 
     public void takeDamage(double damage) {
+        if (invulnerabilityRemaining > 0.0) {
+            return;
+        }
         health.takeDamage(damage);
     }
     
@@ -119,12 +140,16 @@ public final class Player {
             if (respawnTimerRemaining <= 0.0) {
                 health.revive();
                 animator.resetToIdle();
+                invulnerabilityRemaining = INVULNERABILITY_SECONDS;
             }
             return;
         }
 
         updateCooldowns(deltaSeconds);
         tickRoot(deltaSeconds);
+        tickHitFlash(deltaSeconds);
+        tickHealFlash(deltaSeconds);
+        tickInvulnerability(deltaSeconds);
         switchCharacterIfRequested(keyboardInput);
 
         double dx = 0.0;
@@ -180,34 +205,29 @@ public final class Player {
 
         int bottomPadding = getBottomPadding(frame);
         int scaledBottomPadding = (int) Math.round(bottomPadding * SIZE / (double) frame.getHeight());
+        int drawX = (int) x;
         int drawY = (int) (y + scaledBottomPadding);
 
-        if (facingLeft) {
-            graphics.drawImage(
-                    frame,
-                    (int) x + SIZE,
-                    drawY,
-                    (int) x,
-                    drawY + SIZE,
-                    0,
-                    0,
-                    frame.getWidth(),
-                    frame.getHeight(),
-                    null
-            );
-        } else {
-            graphics.drawImage(
-                    frame,
-                    (int) x,
-                    drawY,
-                    (int) x + SIZE,
-                    drawY + SIZE,
-                    0,
-                    0,
-                    frame.getWidth(),
-                    frame.getHeight(),
-                    null
-            );
+        Composite originalComposite = null;
+        if (invulnerabilityRemaining > 0.0) {
+            boolean dim = (System.currentTimeMillis() / 150) % 2 == 0;
+            if (dim) {
+                originalComposite = graphics.getComposite();
+                graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.3f));
+            }
+        }
+
+        drawSpriteFrame(graphics, frame, drawX, drawY, facingLeft);
+
+        if (originalComposite != null) {
+            graphics.setComposite(originalComposite);
+        }
+
+        if (hitFlashSecondsRemaining > 0.0 && !isDead()) {
+            drawSpriteOverlay(graphics, frame, drawX, drawY, facingLeft, HIT_FLASH_COLOR, HIT_FLASH_ALPHA);
+        }
+        if (!isDead() && (healFlashSecondsRemaining > 0.0 || isAswangHealing())) {
+            drawSpriteOverlay(graphics, frame, drawX, drawY, facingLeft, HEAL_FLASH_COLOR, HEAL_FLASH_ALPHA);
         }
 
         getActiveCharacter().drawEffects(graphics);
@@ -239,6 +259,10 @@ public final class Player {
 
     public boolean isFacingLeft() {
         return facingLeft;
+    }
+
+    public boolean isOnGroundState() {
+        return isOnGround();
     }
 
     public PlayerAction getCurrentAction() {
@@ -502,6 +526,28 @@ public final class Player {
         }
     }
 
+    private void tickHitFlash(double deltaSeconds) {
+        if (hitFlashSecondsRemaining > 0.0) {
+            hitFlashSecondsRemaining = Math.max(0.0, hitFlashSecondsRemaining - deltaSeconds);
+        }
+    }
+
+    private void tickHealFlash(double deltaSeconds) {
+        if (healFlashSecondsRemaining > 0.0) {
+            healFlashSecondsRemaining = Math.max(0.0, healFlashSecondsRemaining - deltaSeconds);
+        }
+    }
+
+    private void tickInvulnerability(double deltaSeconds) {
+        if (invulnerabilityRemaining > 0.0) {
+            invulnerabilityRemaining = Math.max(0.0, invulnerabilityRemaining - deltaSeconds);
+        }
+    }
+
+    public boolean isInvulnerable() {
+        return invulnerabilityRemaining > 0.0;
+    }
+
     private boolean isMovementLocked() {
         return rootedSecondsRemaining > 0.0
                 || (animator.isLocked() && getActiveCharacter().locksMovement(animator.getAction()));
@@ -551,5 +597,37 @@ public final class Player {
             }
         }
         return 0;
+    }
+
+    private void drawSpriteFrame(Graphics2D graphics, BufferedImage frame,
+            int drawX, int drawY, boolean flipped) {
+        if (flipped) {
+            graphics.drawImage(frame, drawX + SIZE, drawY, drawX, drawY + SIZE,
+                    0, 0, frame.getWidth(), frame.getHeight(), null);
+        } else {
+            graphics.drawImage(frame, drawX, drawY, drawX + SIZE, drawY + SIZE,
+                    0, 0, frame.getWidth(), frame.getHeight(), null);
+        }
+    }
+
+    private void drawSpriteOverlay(Graphics2D graphics, BufferedImage frame,
+            int drawX, int drawY, boolean flipped, Color color, float alpha) {
+        BufferedImage overlay = new BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D overlayGraphics = overlay.createGraphics();
+        try {
+            drawSpriteFrame(overlayGraphics, frame, 0, 0, flipped);
+            overlayGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_IN, alpha));
+            overlayGraphics.setColor(color);
+            overlayGraphics.fillRect(0, 0, SIZE, SIZE);
+        } finally {
+            overlayGraphics.dispose();
+        }
+        graphics.drawImage(overlay, drawX, drawY, null);
+    }
+
+    private boolean isAswangHealing() {
+        return !isDead()
+                && activeCharacterIndex == 2
+                && animator.getAction() == PlayerAction.MOVE_3;
     }
 }

@@ -1,3 +1,52 @@
+/*
+ * Key Objects / Libraries Used
+ *
+ * Gson
+ * - Converts Java objects to JSON and JSON strings back to Java objects.
+ * - Used for serializing server messages and deserializing client messages.
+ * - Reference: https://github.com/google/gson/blob/main/UserGuide.md
+ *
+ * ServerSocket
+ * - Listens for incoming TCP connections on a specific port.
+ * - Used to accept new client connections in the accept thread.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/net/ServerSocket.html
+ *
+ * Socket
+ * - Represents an individual client connection to the server.
+ * - Used to read from and write to each connected client.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/net/Socket.html
+ *
+ * PrintWriter
+ * - Writes text data to an output stream.
+ * - Used to send JSON messages from the server to each client.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/io/PrintWriter.html
+ *
+ * BufferedReader
+ * - Reads text data from an input stream efficiently, line by line.
+ * - Used to receive JSON messages from each client.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/io/BufferedReader.html
+ *
+ * Thread
+ * - Allows code to run in the background.
+ * - Used for the client accept loop and per-client reader threads.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/lang/Thread.html
+ *
+ * synchronized / Object lock
+ * - Ensures only one thread accesses shared data at a time.
+ * - Used to protect the clients and players maps from concurrent modification.
+ * - Reference: https://docs.oracle.com/javase/tutorial/essential/concurrency/syncmeth.html
+ *
+ * LinkedHashMap
+ * - A map that maintains insertion order.
+ * - Used to store clients and players so iteration order is consistent.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/LinkedHashMap.html
+ *
+ * Iterator
+ * - Allows safe removal of elements while iterating a collection.
+ * - Used when removing projectiles that hit a player or go off screen.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/Iterator.html
+ */
+
 package com.engkanto.server.game;
 
 import java.io.BufferedReader;
@@ -27,6 +76,7 @@ import com.google.gson.JsonSyntaxException;
 public final class GameServer {
     private static final double TARGET_UPDATES_PER_SECOND = 60.0;
     private static final double COUNTDOWN_SECONDS = 10.0;
+    private static final double GAME_DURATION_SECONDS = 180.0;
     private static final int SCREEN_HEIGHT = 704;
 
     private static final double[][] SPAWN_CANDIDATES = {
@@ -35,7 +85,7 @@ public final class GameServer {
             {408, 196}, {720, 196}, {1112, 296}
     };
 
-    private enum Phase { LOBBY, IN_GAME }
+    private enum Phase { LOBBY, IN_GAME, GAME_OVER }
 
     private final Gson gson = new Gson();
     private final Object lock = new Object();
@@ -52,11 +102,20 @@ public final class GameServer {
     private Phase phase = Phase.LOBBY;
     private boolean countdownActive;
     private double countdownRemaining;
+    private double gameSecondsRemaining = GAME_DURATION_SECONDS;
 
     public GameServer(int port) {
         this.port = port;
     }
 
+    /*
+     * runBlocking()
+     *
+     * - Entry point that starts the server.
+     * - Opens a ServerSocket on the configured port to listen for connections.
+     * - Starts a daemon thread to accept incoming client connections.
+     * - Runs the main game loop on the current thread (blocks until the server stops).
+     */
     public void runBlocking() throws IOException {
         running = true;
         serverSocket = new ServerSocket(port);
@@ -68,6 +127,13 @@ public final class GameServer {
         runGameLoop();
     }
 
+    /*
+     * acceptClients()
+     *
+     * - Runs in a background thread to accept incoming client connections.
+     * - Loops until the server is no longer running.
+     * - Passes each accepted socket to handleAcceptedClient for setup.
+     */
     private void acceptClients() {
         while (running) {
             try {
@@ -81,9 +147,21 @@ public final class GameServer {
         }
     }
 
+    /*
+    * handleAcceptedClient(Socket socket)
+    *
+    * - Handles a newly connected client socket.
+    * - Rejects the client if the game is not in the lobby phase.
+    * - Rejects the client if the server already reached the maximum number of players.
+    * - Creates a new player ID, ServerPlayer, and ClientConnection for accepted clients.
+    * - Sends a welcome message to tell the client its assigned player ID.
+    * - Starts a reader thread so the server can receive messages from that client.
+    * - Updates and broadcasts the lobby state after the client joins.
+    * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/net/Socket.html
+    */
     private void handleAcceptedClient(Socket socket) throws IOException {
         synchronized (lock) {
-            if (phase == Phase.IN_GAME) {
+            if (phase != Phase.LOBBY) {
                 PrintWriter writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
                 writer.println(gson.toJson(ServerMessage.disconnect("Game already in progress")));
                 socket.close();
@@ -117,6 +195,14 @@ public final class GameServer {
         return new ServerPlayer(playerId, x, groundY);
     }
 
+    /*
+     * runGameLoop()
+     *
+     * - The main server game loop that runs on the main thread.
+     * - Uses a fixed-timestep accumulator to update at 60 ticks per second.
+     * - Calls update() for each accumulated tick.
+     * - Sleeps briefly between iterations to avoid burning CPU.
+     */
     private void runGameLoop() {
         final double secondsPerUpdate = 1.0 / TARGET_UPDATES_PER_SECOND;
         final double nanosPerUpdate = secondsPerUpdate * 1_000_000_000.0;
@@ -137,15 +223,29 @@ public final class GameServer {
         }
     }
 
+    /*
+     * update(double deltaSeconds)
+     *
+     * - Called once per server tick to advance the game state.
+     * - In the lobby phase, delegates to updateLobby for countdown logic.
+     * - In the game-over phase, just broadcasts the final state.
+     * - During gameplay, updates all players, resolves combat/vines/poisons/projectiles,
+     *   handles respawns, checks the game timer, and broadcasts the new state to all clients.
+     */
     private void update(double deltaSeconds) {
         if (phase == Phase.LOBBY) {
             updateLobby(deltaSeconds);
+            return;
+        }
+        if (phase == Phase.GAME_OVER) {
+            broadcastGameState();
             return;
         }
 
         List<ClientConnection> connections;
         GameStateSnapshot snapshot;
         synchronized (lock) {
+            gameSecondsRemaining = Math.max(0.0, gameSecondsRemaining - deltaSeconds);
             for (ServerPlayer player : players.values()) {
                 player.update(deltaSeconds, platforms);
             }
@@ -154,6 +254,10 @@ public final class GameServer {
             resolvePoisons(deltaSeconds);
             updateProjectiles(deltaSeconds);
             respawnReadyPlayers();
+            if (gameSecondsRemaining <= 0.0) {
+                phase = Phase.GAME_OVER;
+                System.out.println("Game over!");
+            }
             tick++;
             snapshot = createSnapshot();
             connections = new ArrayList<>(clients.values());
@@ -164,6 +268,13 @@ public final class GameServer {
         }
     }
 
+    /*
+     * updateLobby(double deltaSeconds)
+     *
+     * - Handles the lobby countdown timer.
+     * - Ticks down the countdown and broadcasts lobby state when the displayed second changes.
+     * - When the countdown reaches zero, locks in character selections and transitions to the game phase.
+     */
     private void updateLobby(double deltaSeconds) {
         List<ClientConnection> connections = null;
         LobbySnapshot snapshot = null;
@@ -186,6 +297,7 @@ public final class GameServer {
                     }
                 }
                 phase = Phase.IN_GAME;
+                gameSecondsRemaining = GAME_DURATION_SECONDS;
                 countdownActive = false;
                 connections = new ArrayList<>(clients.values());
             } else if (currentSecond != previousSecond) {
@@ -208,6 +320,32 @@ public final class GameServer {
         }
     }
 
+    /*
+     * broadcastGameState()
+     *
+     * - Builds a GameStateSnapshot and sends it to all connected clients.
+     * - Used during the game-over phase to keep sending the final state.
+     */
+    private void broadcastGameState() {
+        List<ClientConnection> connections;
+        GameStateSnapshot snapshot;
+        synchronized (lock) {
+            snapshot = createSnapshot();
+            connections = new ArrayList<>(clients.values());
+        }
+        ServerMessage message = ServerMessage.gameState(snapshot);
+        for (ClientConnection connection : connections) {
+            connection.send(message);
+        }
+    }
+
+    /*
+     * checkCountdownState()
+     *
+     * - Checks if all connected clients are ready to start the game.
+     * - Starts the countdown timer if everyone is ready.
+     * - Cancels the countdown if any player is not ready or no players are connected.
+     */
     private void checkCountdownState() {
         synchronized (lock) {
             if (phase != Phase.LOBBY) {
@@ -240,6 +378,12 @@ public final class GameServer {
         }
     }
 
+    /*
+     * broadcastLobbyState()
+     *
+     * - Builds a LobbySnapshot and sends it to all connected clients.
+     * - Only broadcasts if the game is still in the lobby phase.
+     */
     private void broadcastLobbyState() {
         LobbySnapshot snapshot;
         List<ClientConnection> connections;
@@ -256,6 +400,12 @@ public final class GameServer {
         }
     }
 
+    /*
+     * createLobbySnapshot()
+     *
+     * - Builds a LobbySnapshot with each player's ID, character selection, and ready status.
+     * - Includes the countdown timer value if the countdown is active.
+     */
     private LobbySnapshot createLobbySnapshot() {
         LobbySnapshot snapshot = new LobbySnapshot();
         for (ClientConnection connection : clients.values()) {
@@ -270,6 +420,15 @@ public final class GameServer {
         return snapshot;
     }
 
+    /*
+     * resolvePlayerCombat()
+     *
+     * - Checks each player for a pending attack and resolves it.
+     * - For ranged attacks, creates a ServerProjectile and adds it to the projectile list.
+     * - For melee attacks, checks all other players for overlap and applies damage.
+     * - Awards a kill to the attacker if the target dies.
+     * - Applies poison to the target if the attack is a poison-type move.
+     */
     private void resolvePlayerCombat() {
         for (ServerPlayer attacker : players.values()) {
             if (!attacker.hasAttackReady()) {
@@ -295,6 +454,12 @@ public final class GameServer {
         }
     }
 
+    /*
+     * resolvePoisons(double deltaSeconds)
+     *
+     * - Ticks down active poison effects on all living players.
+     * - If a poison tick kills a player, awards a kill to the poison's owner.
+     */
     private void resolvePoisons(double deltaSeconds) {
         for (ServerPlayer player : players.values()) {
             if (player.isDead()) {
@@ -310,6 +475,13 @@ public final class GameServer {
         }
     }
 
+    /*
+     * resolveVineRoots()
+     *
+     * - Checks each player with a pending vine root ability.
+     * - If the vine overlaps another living, non-invulnerable player, applies a root to them.
+     * - Marks the vine root as resolved after checking all targets.
+     */
     private void resolveVineRoots() {
         for (ServerPlayer caster : players.values()) {
             if (!caster.hasVineRootReady()) {
@@ -327,6 +499,15 @@ public final class GameServer {
         }
     }
 
+    /*
+     * updateProjectiles(double deltaSeconds)
+     *
+     * - Moves all active projectiles and checks for collisions.
+     * - Removes projectiles that go off screen.
+     * - If a projectile overlaps a valid target, applies damage and removes the projectile.
+     * - Awards a kill to the projectile owner if the target dies.
+     * - Uses Iterator for safe removal during iteration.
+     */
     private void updateProjectiles(double deltaSeconds) {
         Iterator<ServerProjectile> iter = projectiles.iterator();
         while (iter.hasNext()) {
@@ -356,6 +537,12 @@ public final class GameServer {
         }
     }
 
+    /*
+     * respawnReadyPlayers()
+     *
+     * - Checks all dead players for completed respawn timers.
+     * - Respawns them at the spawn point farthest from other living players.
+     */
     private void respawnReadyPlayers() {
         for (ServerPlayer player : players.values()) {
             if (player.isReadyToRespawn()) {
@@ -365,6 +552,13 @@ public final class GameServer {
         }
     }
 
+    /*
+     * findBestSpawnPoint(ServerPlayer respawning)
+     *
+     * - Picks the spawn point that maximizes distance from the nearest living enemy.
+     * - Iterates all spawn candidates and computes the minimum distance to other players.
+     * - Returns the candidate with the largest minimum distance.
+     */
     private double[] findBestSpawnPoint(ServerPlayer respawning) {
         double[] best = SPAWN_CANDIDATES[0];
         double bestMinDist = -1.0;
@@ -389,14 +583,28 @@ public final class GameServer {
         return best;
     }
 
+    /*
+     * createSnapshot()
+     *
+     * - Builds a GameStateSnapshot with all player states, the game timer, and the game-over flag.
+     * - Each player's state is converted to a PlayerSnapshot using ServerPlayer.toSnapshot().
+     * - This snapshot is serialized to JSON and sent to all clients each tick.
+     */
     private GameStateSnapshot createSnapshot() {
         List<PlayerSnapshot> snapshots = new ArrayList<>();
         for (ServerPlayer player : players.values()) {
             snapshots.add(player.toSnapshot());
         }
-        return new GameStateSnapshot(tick, snapshots);
+        return new GameStateSnapshot(tick, snapshots, gameSecondsRemaining, phase == Phase.GAME_OVER);
     }
 
+    /*
+     * removeClient(int playerId)
+     *
+     * - Removes a disconnected client and their player from the server.
+     * - Closes the client's socket connection.
+     * - If still in the lobby, rechecks countdown state and broadcasts the updated lobby.
+     */
     private void removeClient(int playerId) {
         synchronized (lock) {
             ClientConnection removed = clients.remove(playerId);
@@ -412,6 +620,13 @@ public final class GameServer {
         }
     }
 
+    /*
+     * createPlatforms()
+     *
+     * - Creates the server-side platform layout for the game map.
+     * - Includes one ground platform and six floating platforms.
+     * - Must stay in sync with the client-side platform layout in GamePanel.
+     */
     private List<ServerPlatform> createPlatforms() {
         List<ServerPlatform> mapPlatforms = new ArrayList<>();
         mapPlatforms.add(new ServerPlatform(0, SCREEN_HEIGHT - 96, 1280, 96, false));
@@ -433,6 +648,13 @@ public final class GameServer {
         }
     }
 
+    /*
+     * ClientConnection
+     *
+     * - Represents a single connected client on the server.
+     * - Holds the player ID, socket, and output writer for sending messages.
+     * - Tracks the client's character selection and ready status during the lobby.
+     */
     private final class ClientConnection {
         private final int playerId;
         private final Socket socket;
@@ -446,12 +668,25 @@ public final class GameServer {
             this.writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
         }
 
+        /*
+         * startReader()
+         *
+         * - Starts a daemon thread to read messages from this client.
+         * - The thread runs readMessages() which loops until the connection closes.
+         */
         private void startReader() {
             Thread readerThread = new Thread(this::readMessages, "engkanto-client-" + playerId);
             readerThread.setDaemon(true);
             readerThread.start();
         }
 
+        /*
+         * readMessages()
+         *
+         * - Reads lines from the client socket in a loop.
+         * - Each line is a JSON message passed to handleClientMessage for processing.
+         * - When the connection closes or errors out, removes the client from the server.
+         */
         private void readMessages() {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
@@ -465,6 +700,15 @@ public final class GameServer {
             }
         }
 
+        /*
+         * handleClientMessage(String line)
+         *
+         * - Parses a JSON message from the client and processes it based on its type.
+         * - "select_character": updates the client's character choice during the lobby.
+         * - "ready": toggles the client's ready status and rechecks the countdown.
+         * - "input": applies the player's input to their ServerPlayer during gameplay.
+         * - "chat": broadcasts the chat message to all connected clients.
+         */
         private void handleClientMessage(String line) {
             try {
                 ClientMessage message = gson.fromJson(line, ClientMessage.class);
@@ -493,7 +737,7 @@ public final class GameServer {
                     broadcastLobbyState();
                 } else if ("input".equals(message.type) && message.input != null) {
                     synchronized (lock) {
-                        ServerPlayer player = players.get(playerId);
+                        ServerPlayer player = phase == Phase.IN_GAME ? players.get(playerId) : null;
                         if (player != null) {
                             player.setInput(message.input);
                         }
@@ -506,10 +750,20 @@ public final class GameServer {
             }
         }
 
+        /*
+         * send(ServerMessage message)
+         *
+         * - Serializes a ServerMessage to JSON and sends it to this client.
+         */
         private void send(ServerMessage message) {
             writer.println(gson.toJson(message));
         }
 
+        /*
+         * close()
+         *
+         * - Closes this client's socket connection.
+         */
         private void close() {
             try {
                 socket.close();
@@ -519,6 +773,12 @@ public final class GameServer {
         }
     }
 
+    /*
+     * broadcast(ServerMessage message)
+     *
+     * - Sends a server message to all connected clients.
+     * - Takes a snapshot of the client list under the lock to avoid concurrent modification.
+     */
     private void broadcast(ServerMessage message) {
         List<ClientConnection> connections;
         synchronized (lock) {

@@ -1,3 +1,22 @@
+/*
+ * Key Objects / Methods Used
+ *
+ * SwingUtilities
+ * - Provides helper tools for Swing programs.
+ * - Used here to open the game window properly.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.desktop/javax/swing/SwingUtilities.html
+ *
+ * SwingUtilities.invokeLater(...)
+ * - Provides a way to run GUI code on Swing's correct thread.
+ * - Used here to create and show the GameWindow safely.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.desktop/javax/swing/SwingUtilities.html#invokeLater(java.lang.Runnable)
+ *
+ * Event Dispatch Thread
+ * - Provides the main thread used by Swing for GUI work.
+ * - Used for window creation, button clicks, repainting, and other interface updates.
+ * - Reference: https://docs.oracle.com/javase/tutorial/uiswing/concurrency/dispatch.html
+ */
+
 package com.engkanto.client;
 
 import javax.swing.SwingUtilities;
