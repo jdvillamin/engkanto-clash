@@ -16,6 +16,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 
 import com.engkanto.client.audio.HitSoundEffect;
 import com.engkanto.client.game.character.EngkantoCharacter;
@@ -52,6 +53,7 @@ public final class GamePanel extends JPanel implements Runnable {
     private final AbilityUI abilityUI;
     private final NetworkClient networkClient;
     private final RemotePlayerRenderer remotePlayerRenderer;
+    private final Runnable onExitToLobby;
     private final StringBuilder chatInput = new StringBuilder();
 
     private Thread gameThread;
@@ -62,13 +64,19 @@ public final class GamePanel extends JPanel implements Runnable {
     private boolean chatFocused;
     private double chatVisibleTimer;
     private int lastSeenMessageCount;
+    private boolean exitConfirmVisible;
 
     public GamePanel() {
-        this(null);
+        this(null, null);
     }
 
     public GamePanel(NetworkClient networkClient) {
+        this(networkClient, null);
+    }
+
+    public GamePanel(NetworkClient networkClient, Runnable onExitToLobby) {
         this.networkClient = networkClient;
+        this.onExitToLobby = onExitToLobby;
         keyboardInput = new KeyboardInput();
         platforms = createPlatforms();
         player = new Player(
@@ -94,11 +102,14 @@ public final class GamePanel extends JPanel implements Runnable {
         if (running) {
             return;
         }
-
         running = true;
         gameThread = new Thread(this, "engkanto-game-loop");
         gameThread.start();
         requestFocusInWindow();
+    }
+
+    public synchronized void stop() {
+        running = false;
     }
 
     @Override
@@ -106,7 +117,7 @@ public final class GamePanel extends JPanel implements Runnable {
         if (e.getID() == KeyEvent.KEY_PRESSED) {
             handleChatKey(e);
         }
-        if (!chatFocused) {
+        if (!chatFocused && !exitConfirmVisible) {
             keyboardInput.dispatch(e);
         }
         super.processKeyEvent(e);
@@ -137,6 +148,10 @@ public final class GamePanel extends JPanel implements Runnable {
 
     private void update(double deltaSeconds) {
         if (isNetworkMode()) {
+            if (!networkClient.isConnected()) {
+                exitToLobby();
+                return;
+            }
             networkClient.sendInput(keyboardInput.consumeNetworkSnapshot(++inputSequence));
             remotePlayerRenderer.update(deltaSeconds, networkClient.getLatestState());
             tickChatVisibility(deltaSeconds);
@@ -156,6 +171,14 @@ public final class GamePanel extends JPanel implements Runnable {
         resolveVineRoots();
     }
 
+    private void exitToLobby() {
+        running = false;
+        networkClient.sendExitToLobby();
+        if (onExitToLobby != null) {
+            SwingUtilities.invokeLater(onExitToLobby);
+        }
+    }
+
     private void tickChatVisibility(double deltaSeconds) {
         if (chatVisibleTimer > 0.0) {
             chatVisibleTimer = Math.max(0.0, chatVisibleTimer - deltaSeconds);
@@ -170,7 +193,20 @@ public final class GamePanel extends JPanel implements Runnable {
     private void handleChatKey(KeyEvent e) {
         if (!isNetworkMode()) return;
 
+        if (e.getKeyCode() == KeyEvent.VK_ESCAPE && !chatFocused) {
+            exitConfirmVisible = !exitConfirmVisible;
+            return;
+        }
+
         if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+            if (exitConfirmVisible) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    exitToLobby();
+                } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+                    exitConfirmVisible = false;
+                }
+                return;
+            }
             if (chatFocused) {
                 String text = chatInput.toString().trim();
                 if (!text.isEmpty()) {
@@ -299,7 +335,9 @@ public final class GamePanel extends JPanel implements Runnable {
                     drawNetworkAbilityUI(graphics2D, localPlayer);
                 }
                 drawTabHint(graphics2D);
+                drawEscHint(graphics2D);
                 drawChat(graphics2D);
+                drawExitConfirm(graphics2D);
                 if (keyboardInput.isTabPressed() && state != null) {
                     drawLeaderboard(graphics2D, state);
                 }
@@ -312,6 +350,28 @@ public final class GamePanel extends JPanel implements Runnable {
             }
         } finally {
             graphics2D.dispose();
+        }
+    }
+
+    private void drawEscHint(Graphics2D graphics) {
+        if (chatFocused) return;
+        Object prevAA = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        String text = "ESC — Exit to Lobby";
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        FontMetrics fm = graphics.getFontMetrics();
+        int textWidth = fm.stringWidth(text);
+        int px = GameConfig.SCREEN_WIDTH / 2 - (textWidth + 20) / 2;
+        int py = GameConfig.SCREEN_HEIGHT - 52;
+
+        graphics.setColor(new Color(0, 0, 0, 120));
+        graphics.fillRoundRect(px, py, textWidth + 20, 22, 8, 8);
+        graphics.setColor(new Color(200, 200, 200));
+        graphics.drawString(text, px + 10, py + 16);
+
+        if (prevAA != null) {
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, prevAA);
         }
     }
 
@@ -357,6 +417,35 @@ public final class GamePanel extends JPanel implements Runnable {
         }
 
         g.setComposite(original);
+    }
+
+    private void drawExitConfirm(Graphics2D g) {
+        if (!exitConfirmVisible) return;
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setColor(new Color(0, 0, 0, 160));
+        g.fillRect(0, 0, GameConfig.SCREEN_WIDTH, GameConfig.SCREEN_HEIGHT);
+
+        int pw = 360;
+        int ph = 120;
+        int px = (GameConfig.SCREEN_WIDTH - pw) / 2;
+        int py = (GameConfig.SCREEN_HEIGHT - ph) / 2;
+
+        g.setColor(new Color(30, 38, 34, 240));
+        g.fillRoundRect(px, py, pw, ph, 16, 16);
+        g.setColor(new Color(74, 52, 30));
+        g.drawRoundRect(px, py, pw, ph, 16, 16);
+
+        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
+        g.setColor(new Color(245, 232, 184));
+        FontMetrics fm = g.getFontMetrics();
+        String msg = "Exit to lobby?";
+        g.drawString(msg, px + (pw - fm.stringWidth(msg)) / 2, py + 44);
+
+        g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
+        g.setColor(new Color(200, 200, 200));
+        String sub = "[Enter] Confirm     [Esc] Cancel";
+        fm = g.getFontMetrics();
+        g.drawString(sub, px + (pw - fm.stringWidth(sub)) / 2, py + 80);
     }
 
     private boolean isNetworkMode() {

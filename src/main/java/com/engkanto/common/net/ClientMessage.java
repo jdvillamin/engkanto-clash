@@ -36,4 +36,8 @@ public final class ClientMessage {
     public static ClientMessage ready() {
         return new ClientMessage("ready");
     }
+
+    public static ClientMessage exitToLobby() {
+        return new ClientMessage("exit_to_lobby");
+    }
 }

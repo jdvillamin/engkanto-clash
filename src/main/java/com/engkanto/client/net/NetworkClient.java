@@ -112,6 +112,12 @@ public final class NetworkClient implements Closeable {
         }
     }
 
+    public void sendExitToLobby() {
+        if (!isConnected()) return;
+        writer.println(gson.toJson(ClientMessage.exitToLobby()));
+        if (writer.checkError()) connected = false;
+    }
+
     @Override
     public void close() {
         connected = false;

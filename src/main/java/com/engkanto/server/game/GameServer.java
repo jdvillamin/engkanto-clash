@@ -106,6 +106,10 @@ public final class GameServer {
             client.send(ServerMessage.welcome(playerId));
             client.startReader();
             System.out.println("Player " + playerId + " connected");
+            
+            player.setCharacterIndex(client.characterIndex);
+            client.inGame = false;
+            client.ready = false;
         }
         checkCountdownState();
         broadcastLobbyState();
@@ -200,6 +204,9 @@ public final class GameServer {
             for (ClientConnection connection : connections) {
                 connection.send(message);
             }
+            for (ClientConnection client : clients.values()) {
+                client.inGame = true;
+            }
         } else if (snapshot != null) {
             ServerMessage message = ServerMessage.lobbyState(snapshot);
             for (ClientConnection connection : connections) {
@@ -244,11 +251,11 @@ public final class GameServer {
         LobbySnapshot snapshot;
         List<ClientConnection> connections;
         synchronized (lock) {
-            if (phase != Phase.LOBBY) {
-                return;
-            }
             snapshot = createLobbySnapshot();
-            connections = new ArrayList<>(clients.values());
+            connections = new ArrayList<>();
+            for (ClientConnection c : clients.values()) {
+                if (!c.inGame) connections.add(c);
+            }
         }
         ServerMessage message = ServerMessage.lobbyState(snapshot);
         for (ClientConnection connection : connections) {
@@ -263,10 +270,12 @@ public final class GameServer {
             lobbyPlayer.id = connection.playerId;
             lobbyPlayer.characterIndex = connection.characterIndex;
             lobbyPlayer.characterName = ServerPlayer.CHARACTER_NAMES[connection.characterIndex];
+            lobbyPlayer.inGame = connection.inGame;
             lobbyPlayer.ready = connection.ready;
             snapshot.players.add(lobbyPlayer);
         }
         snapshot.countdownSeconds = countdownActive ? (int) Math.ceil(countdownRemaining) : -1;
+        
         return snapshot;
     }
 
@@ -439,6 +448,7 @@ public final class GameServer {
         private final PrintWriter writer;
         int characterIndex;
         boolean ready;
+        boolean inGame;
 
         private ClientConnection(int playerId, Socket socket) throws IOException {
             this.playerId = playerId;
@@ -500,6 +510,25 @@ public final class GameServer {
                     }
                 } else if ("chat".equals(message.type) && message.chatText != null) {
                     broadcast(ServerMessage.chat(playerId, message.chatText));
+                } else if ("exit_to_lobby".equals(message.type)) {
+                    synchronized (lock) {
+                        ClientConnection conn = clients.get(playerId);
+                        if (conn != null) {
+                            conn.inGame = false;
+                            conn.ready = false;
+                        }
+
+                        ServerPlayer player = players.get(playerId);
+                        if (player != null) {
+                            player.resetState();
+                        }
+
+                        countdownActive = false;
+                        countdownRemaining = -1;
+                    }
+
+                    checkCountdownState();
+                    broadcastLobbyState();
                 }
             } catch (JsonSyntaxException exception) {
                 System.err.println("Bad message from player " + playerId + ": " + exception.getMessage());

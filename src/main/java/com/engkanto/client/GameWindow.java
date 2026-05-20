@@ -1,12 +1,13 @@
 package com.engkanto.client;
 
+import java.awt.BorderLayout;
+
+import javax.swing.JFrame;
+
 import com.engkanto.client.audio.BackgroundMusic;
 import com.engkanto.client.game.GamePanel;
 import com.engkanto.client.lobby.LobbyPanel;
 import com.engkanto.client.net.NetworkClient;
-
-import javax.swing.JFrame;
-import java.awt.BorderLayout;
 
 public final class GameWindow {
     private static final String TITLE = "Engkanto Clash";
@@ -55,10 +56,23 @@ public final class GameWindow {
             frame.remove(lobbyPanel);
             lobbyPanel = null;
         }
-        gamePanel = new GamePanel(networkClient);
+        gamePanel = new GamePanel(networkClient, this::transitionToLobby);
         frame.add(gamePanel, BorderLayout.CENTER);
         frame.revalidate();
         frame.repaint();
         gamePanel.start();
+    }
+
+    private void transitionToLobby() {
+        if (gamePanel != null) {
+            gamePanel.stop();
+            frame.remove(gamePanel);
+            gamePanel = null;
+        }
+        lobbyPanel = new LobbyPanel(networkClient, this::transitionToGame);
+        frame.add(lobbyPanel, BorderLayout.CENTER);
+        frame.revalidate();
+        frame.repaint();
+        lobbyPanel.start();
     }
 }

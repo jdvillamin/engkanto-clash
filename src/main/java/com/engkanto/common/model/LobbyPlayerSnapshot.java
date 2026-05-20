@@ -5,6 +5,7 @@ public final class LobbyPlayerSnapshot {
     public int characterIndex;
     public String characterName;
     public boolean ready;
+    public boolean inGame;
 
     public LobbyPlayerSnapshot() {
     }

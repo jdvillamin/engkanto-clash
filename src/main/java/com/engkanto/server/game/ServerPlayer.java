@@ -810,4 +810,43 @@ final class ServerPlayer {
             this.tickTimer = tickInterval;
         }
     }
+
+    public void resetState() {
+        health = MAX_HEALTH;
+
+        respawnTimerRemaining = 0.0;
+
+        verticalVelocity = 0.0;
+        dashVelocity = 0.0;
+        committedDashDirection = 0;
+        specialDashPending = false;
+
+        rootedSecondsRemaining = 0.0;
+        invulnerabilityRemaining = 0.0;
+
+        hitFlashSecondsRemaining = 0.0;
+
+        attackPending = false;
+        pendingDamage = 0.0;
+        pendingRangedAttack = false;
+        pendingPoison = false;
+
+        vineRootPending = false;
+
+        poisonEffects.clear();
+
+        action = "IDLE";
+        frameIndex = 0;
+        frameTimer = 0.0;
+        actionElapsedSeconds = 0.0;
+        actionLocked = false;
+
+        jumpElapsedSeconds = 0.0;
+        landingFrameRemaining = 0.0;
+
+        move1CooldownRemaining = 0.0;
+        move2CooldownRemaining = 0.0;
+        move3CooldownRemaining = 0.0;
+        specialCooldownRemaining = 0.0;
+    }
 }

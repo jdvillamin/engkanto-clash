@@ -322,9 +322,14 @@ public final class LobbyPanel extends JPanel implements Runnable {
                 g.drawString(text, SLOTS_START_X + 15, slotY + 23);
 
                 g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
-                if (playerInfo.ready) {
+                if (playerInfo.inGame) {
+                    g.setColor(new Color(100, 160, 255));
+                    g.drawString("IN GAME", SLOTS_START_X + SLOT_WIDTH - 90, slotY + 23);
+
+                } else if (playerInfo.ready) {
                     g.setColor(READY_COLOR);
                     g.drawString("READY", SLOTS_START_X + SLOT_WIDTH - 80, slotY + 23);
+
                 } else {
                     g.setColor(NOT_READY_COLOR);
                     g.drawString("NOT READY", SLOTS_START_X + SLOT_WIDTH - 100, slotY + 23);
