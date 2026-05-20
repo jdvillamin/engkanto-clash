@@ -50,6 +50,7 @@ public final class TestDummy {
     private double respawnTimer;
     private boolean pendingRespawn;
     private double invulnerabilityRemaining;
+    private double rootedSecondsRemaining;
 
     public TestDummy(double x, double y) {
         this.originX = x;
@@ -72,6 +73,7 @@ public final class TestDummy {
             @Override
             public void onDeath() {
                 hitFlashRemaining = 0.0;
+                rootedSecondsRemaining = 0.0;
                 pendingRespawn    = true;
                 respawnTimer      = RESPAWN_SECONDS;
             }
@@ -91,6 +93,9 @@ public final class TestDummy {
         }
         if (invulnerabilityRemaining > 0.0) {
             invulnerabilityRemaining = Math.max(0.0, invulnerabilityRemaining - deltaSeconds);
+        }
+        if (rootedSecondsRemaining > 0.0) {
+            rootedSecondsRemaining = Math.max(0.0, rootedSecondsRemaining - deltaSeconds);
         }
 
         if (pendingRespawn) {
@@ -242,6 +247,14 @@ public final class TestDummy {
 
     public boolean isInvulnerable() {
         return invulnerabilityRemaining > 0.0;
+    }
+
+    public void applyRoot(double seconds) {
+        rootedSecondsRemaining = Math.max(rootedSecondsRemaining, seconds);
+    }
+
+    public boolean isRooted() {
+        return rootedSecondsRemaining > 0.0;
     }
 
     private void respawn() {

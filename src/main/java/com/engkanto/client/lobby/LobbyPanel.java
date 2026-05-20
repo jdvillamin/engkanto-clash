@@ -1,3 +1,16 @@
+/*
+ * Key Objects / Libraries Used
+ *
+ * JPanel — Base Swing component; LobbyPanel overrides paintComponent() to draw the lobby UI.
+ * Graphics2D — Draws shapes, images, and text for the character cards, player slots, and chat.
+ * KeyEvent / KeyAdapter — Captures keyboard input for the chat text field.
+ * MouseEvent / MouseAdapter — Detects clicks on character cards and the ready button.
+ * BufferedImage — Stores character portrait sprites extracted from sprite sheets.
+ * NetworkClient — Sends character selection, ready, and chat messages to the server.
+ * LobbySnapshot — Server state containing all players' character choices and ready status.
+ * SwingUtilities — Runs the game-start callback on the EDT when the server starts the match.
+ */
+
 package com.engkanto.client.lobby;
 
 import java.awt.Color;
@@ -79,6 +92,9 @@ public final class LobbyPanel extends JPanel implements Runnable {
     private Thread lobbyThread;
     private volatile boolean running;
 
+    /*
+     * LobbyPanel — Sets up the panel, loads portraits, and registers mouse/key listeners.
+     */
     public LobbyPanel(NetworkClient networkClient, Runnable onGameStart) {
         this.networkClient = networkClient;
         this.onGameStart = onGameStart;
@@ -111,6 +127,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         });
     }
 
+    /* start — Starts the lobby polling thread. */
     public synchronized void start() {
         if (running) {
             return;
@@ -125,6 +142,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         running = false;
     }
 
+    /* run — Polls for game start and repaints the lobby at ~60 fps. */
     @Override
     public void run() {
         while (running) {
@@ -143,6 +161,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         }
     }
 
+    /* paintComponent — Draws background, cards, player slots, ready button, chat, and countdown. */
     @Override
     protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
@@ -167,6 +186,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         }
     }
 
+    /* handleClick — Selects a character card or toggles ready on button click. */
     private void handleClick(int mx, int my) {
         if (!networkClient.isConnected() || networkClient.isGameStarted()) {
             return;
@@ -191,6 +211,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         }
     }
 
+    /* updateHover — Tracks which card or button the mouse is over for hover effects. */
     private void updateHover(int mx, int my) {
         hoveredCard = -1;
         hoveringReadyButton = false;
@@ -210,6 +231,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         }
     }
 
+    /* handleChatKey — Handles Enter to send, Backspace to delete, and typing for chat. */
     private void handleChatKey(KeyEvent e) {
         if (e.getKeyCode() == KeyEvent.VK_ENTER) {
             String text = chatInput.toString().trim();
@@ -228,6 +250,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         }
     }
 
+    /* drawBackground — Fills the background and draws the tile grid. */
     private void drawBackground(Graphics2D g) {
         g.setColor(new Color(42, 92, 76));
         g.fillRect(0, 0, getWidth(), getHeight());
@@ -240,6 +263,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         }
     }
 
+    /* drawTitle — Draws the game title and subtitle text. */
     private void drawTitle(Graphics2D g) {
         g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 48));
         g.setColor(TITLE_COLOR);
@@ -250,6 +274,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         drawCenteredString(g, "Select your character", 105);
     }
 
+    /* drawCharacterCards — Draws the four character selection cards with portraits and highlight. */
     private void drawCharacterCards(Graphics2D g) {
         for (int i = 0; i < 4; i++) {
             int cardX = CARDS_START_X + i * (CARD_WIDTH + CARD_GAP);
@@ -294,6 +319,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         }
     }
 
+    /* drawPlayerSlots — Draws four player slots showing name, character, and ready status. */
     private void drawPlayerSlots(Graphics2D g) {
         g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
         g.setColor(TITLE_COLOR);
@@ -337,6 +363,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         }
     }
 
+    /* drawReadyButton — Draws the ready/cancel button with hover color change. */
     private void drawReadyButton(Graphics2D g) {
         Color btnColor;
         String btnText;
@@ -362,6 +389,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         g.drawString(btnText, textX, textY);
     }
 
+    /* drawChat — Draws the chat message history and input box. */
     private void drawChat(Graphics2D g) {
         g.setColor(new Color(0, 0, 0, 140));
         g.fillRoundRect(CHAT_X, CHAT_Y, CHAT_WIDTH, CHAT_HEIGHT, 8, 8);
@@ -392,6 +420,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         g.drawString(chatInput.toString() + "|", CHAT_X + 8, inputY + 20);
     }
 
+    /* drawCountdown — Shows the countdown timer text when all players are ready. */
     private void drawCountdown(Graphics2D g) {
         LobbySnapshot lobbyState = networkClient.getLatestLobbyState();
         if (lobbyState == null || lobbyState.countdownSeconds <= 0) {
@@ -403,6 +432,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         drawCenteredString(g, "Game starting in " + lobbyState.countdownSeconds + "...", 660);
     }
 
+    /* drawDisconnected — Draws a fullscreen overlay with a disconnection message. */
     private void drawDisconnected(Graphics2D g) {
         g.setColor(new Color(0, 0, 0, 160));
         g.fillRect(0, 0, getWidth(), getHeight());
@@ -425,6 +455,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
         return lobbyState.players.get(slotIndex);
     }
 
+    /* loadCharacterPortraits — Loads the first idle frame from each character's sprite sheet. */
     private BufferedImage[] loadCharacterPortraits() {
         BufferedImage[] portraits = new BufferedImage[4];
         for (int i = 0; i < 4; i++) {

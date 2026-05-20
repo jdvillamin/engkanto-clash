@@ -39,6 +39,7 @@ public final class Player {
     private static final double INVULNERABILITY_SECONDS = 3.0;
     private static final float HIT_FLASH_ALPHA = 0.35f;
     private static final Color HIT_FLASH_COLOR = new Color(255, 50, 50);
+    private static final double HEAL_FLASH_SECONDS = 0.25;
     private static final float HEAL_FLASH_ALPHA = 0.35f;
     private static final Color HEAL_FLASH_COLOR = new Color(70, 230, 95);
 
@@ -63,6 +64,7 @@ public final class Player {
     private double respawnTimerRemaining;
     private double rootedSecondsRemaining;
     private double hitFlashSecondsRemaining;
+    private double healFlashSecondsRemaining;
     private double invulnerabilityRemaining;
     private static final double RESPAWN_SECONDS = 1.0;
 
@@ -89,6 +91,7 @@ public final class Player {
 
             @Override
             public void onHeal(double amount) {
+                healFlashSecondsRemaining = HEAL_FLASH_SECONDS;
             }
 
             @Override
@@ -145,6 +148,7 @@ public final class Player {
         updateCooldowns(deltaSeconds);
         tickRoot(deltaSeconds);
         tickHitFlash(deltaSeconds);
+        tickHealFlash(deltaSeconds);
         tickInvulnerability(deltaSeconds);
         switchCharacterIfRequested(keyboardInput);
 
@@ -222,7 +226,7 @@ public final class Player {
         if (hitFlashSecondsRemaining > 0.0 && !isDead()) {
             drawSpriteOverlay(graphics, frame, drawX, drawY, facingLeft, HIT_FLASH_COLOR, HIT_FLASH_ALPHA);
         }
-        if (isAswangHealing()) {
+        if (!isDead() && (healFlashSecondsRemaining > 0.0 || isAswangHealing())) {
             drawSpriteOverlay(graphics, frame, drawX, drawY, facingLeft, HEAL_FLASH_COLOR, HEAL_FLASH_ALPHA);
         }
 
@@ -521,6 +525,12 @@ public final class Player {
     private void tickHitFlash(double deltaSeconds) {
         if (hitFlashSecondsRemaining > 0.0) {
             hitFlashSecondsRemaining = Math.max(0.0, hitFlashSecondsRemaining - deltaSeconds);
+        }
+    }
+
+    private void tickHealFlash(double deltaSeconds) {
+        if (healFlashSecondsRemaining > 0.0) {
+            healFlashSecondsRemaining = Math.max(0.0, healFlashSecondsRemaining - deltaSeconds);
         }
     }
 

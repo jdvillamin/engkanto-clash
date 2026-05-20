@@ -65,7 +65,7 @@ public final class SpriteAnimator {
             return;
         }
 
-        if (locked) {
+        if (locked && action != PlayerAction.DEATH) {
             locked = false;
             start(PlayerAction.IDLE, false);
         }

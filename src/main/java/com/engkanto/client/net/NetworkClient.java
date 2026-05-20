@@ -1,3 +1,42 @@
+/*
+ * Key Objects / Libraries Used
+ *
+ * Gson
+ * - Converts Java objects to JSON and JSON strings back to Java objects.
+ * - Used for client/server message serialization and deserialization.
+ * - Reference: https://github.com/google/gson/blob/main/UserGuide.md
+ *
+ * Socket
+ * - Represents the client-side network connection to the game server.
+ * - Used to connect to the server through a host and port.
+ * - Reference: https://docs.oracle.com/javase/8/docs/api/java/net/Socket.html
+ *
+ * PrintWriter
+ * - Writes text data to an output stream.
+ * - Used to send JSON messages from the client to the server.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/io/PrintWriter.html
+ *
+ * BufferedReader
+ * - Reads text data from an input stream efficiently, line by line.
+ * - Used to receive JSON messages from the server.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/io/BufferedReader.html
+ *
+ * AtomicReference
+ * - Stores an object reference that can be updated safely across threads.
+ * - Used for the latest game and lobby state snapshots.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/concurrent/atomic/AtomicReference.html
+ *
+ * CopyOnWriteArrayList
+ * - Provides a thread-safe list implementation.
+ * - Used to store chat messages while the network reader thread is running.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/concurrent/CopyOnWriteArrayList.html
+ *
+ * Thread
+ * - Allows code to run in the background.
+ * - Used to continuously read server messages without blocking the main client/game flow.
+ * - Reference: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/lang/Thread.html
+ */
+
 package com.engkanto.client.net;
 
 import java.io.BufferedReader;

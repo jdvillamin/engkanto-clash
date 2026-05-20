@@ -19,11 +19,15 @@ If no server is available, the client automatically runs the local version.
 
 ## Tech Used
 
-- Java 17
-- Gradle
-- Swing and Java2D
-- JUnit 5
-- Gson
+- Java 17: main programming language for the client and server
+- Gradle: build, run, dependency, and test management
+- Java Swing: desktop window, panels, and keyboard input handling
+- Java2D: sprite, platform, projectile, HUD, lobby, and text rendering
+- Java TCP sockets: multiplayer client-server communication
+- Gson: JSON serialization and deserialization for network messages
+- JUnit 5: automated tests for health and combat behavior
+- JLayer: MP3 decoding for background music
+- Java Sound API: audio playback for music and hit sound effects
 
 ## How To Run
 
