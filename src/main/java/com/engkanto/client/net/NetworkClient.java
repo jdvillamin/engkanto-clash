@@ -206,7 +206,10 @@ public final class NetworkClient implements Closeable {
                 localPlayerId = message.playerId;
             } else if ("lobby_state".equals(message.type) && message.lobbyState != null) {
                 latestLobbyState.set(message.lobbyState);
+                latestState.set(null);
+                gameStarted = false;
             } else if ("game_start".equals(message.type)) {
+                latestState.set(null);
                 gameStarted = true;
             } else if ("state".equals(message.type) && message.state != null) {
                 latestState.set(message.state);
