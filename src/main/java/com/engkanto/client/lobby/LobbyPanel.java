@@ -30,6 +30,8 @@ import java.util.List;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
+import com.engkanto.client.audio.AudioCue;
+import com.engkanto.client.audio.AudioManager;
 import com.engkanto.client.game.GameConfig;
 import com.engkanto.client.net.NetworkClient;
 import com.engkanto.client.render.AssetLoader;
@@ -38,6 +40,7 @@ import com.engkanto.common.model.LobbyPlayerSnapshot;
 import com.engkanto.common.model.LobbySnapshot;
 
 public final class LobbyPanel extends JPanel implements Runnable {
+    private static final String TITLE_LOGO_PATH = "/assets/logos/main.png";
     private static final String[] CHARACTER_NAMES = {"Tikbalang", "Kapre", "Aswang", "Engkanto"};
     private static final String[] SPRITE_PATHS = {
             "/assets/sprites/tikbalang.png",
@@ -49,19 +52,19 @@ public final class LobbyPanel extends JPanel implements Runnable {
     private static final int CARD_WIDTH = 150;
     private static final int CARD_HEIGHT = 190;
     private static final int CARD_GAP = 30;
-    private static final int CARDS_START_Y = 140;
+    private static final int CARDS_START_Y = 205;
     private static final int CARDS_START_X = (GameConfig.SCREEN_WIDTH - (4 * CARD_WIDTH + 3 * CARD_GAP)) / 2;
 
     private static final int SLOT_WIDTH = 500;
     private static final int SLOT_HEIGHT = 36;
     private static final int SLOT_GAP = 8;
-    private static final int SLOTS_START_Y = 390;
+    private static final int SLOTS_START_Y = 425;
     private static final int SLOTS_START_X = (GameConfig.SCREEN_WIDTH - SLOT_WIDTH) / 2;
 
     private static final int BTN_WIDTH = 220;
     private static final int BTN_HEIGHT = 50;
     private static final int BTN_X = (GameConfig.SCREEN_WIDTH - BTN_WIDTH) / 2;
-    private static final int BTN_Y = 570;
+    private static final int BTN_Y = 605;
 
     private static final int CHAT_X = 20;
     private static final int CHAT_Y = 400;
@@ -82,6 +85,8 @@ public final class LobbyPanel extends JPanel implements Runnable {
 
     private final NetworkClient networkClient;
     private final Runnable onGameStart;
+    private final AudioManager audioManager;
+    private final BufferedImage titleLogo;
     private final BufferedImage[] characterPortraits;
     private final StringBuilder chatInput = new StringBuilder();
 
@@ -96,8 +101,14 @@ public final class LobbyPanel extends JPanel implements Runnable {
      * LobbyPanel — Sets up the panel, loads portraits, and registers mouse/key listeners.
      */
     public LobbyPanel(NetworkClient networkClient, Runnable onGameStart) {
+        this(networkClient, onGameStart, AudioManager.getInstance());
+    }
+
+    public LobbyPanel(NetworkClient networkClient, Runnable onGameStart, AudioManager audioManager) {
         this.networkClient = networkClient;
         this.onGameStart = onGameStart;
+        this.audioManager = audioManager;
+        this.titleLogo = AssetLoader.loadImage(TITLE_LOGO_PATH);
         this.characterPortraits = loadCharacterPortraits();
 
         setPreferredSize(new Dimension(GameConfig.SCREEN_WIDTH, GameConfig.SCREEN_HEIGHT));
@@ -199,6 +210,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
                 if (!localReady) {
                     selectedCharacterIndex = i;
                     networkClient.sendCharacterSelect(i);
+                    audioManager.playSound(AudioCue.MENU_SELECT);
                 }
                 return;
             }
@@ -208,6 +220,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
                 && my >= BTN_Y && my <= BTN_Y + BTN_HEIGHT) {
             localReady = !localReady;
             networkClient.sendReady();
+            audioManager.playSound(AudioCue.MENU_CONFIRM);
         }
     }
 
@@ -265,13 +278,16 @@ public final class LobbyPanel extends JPanel implements Runnable {
 
     /* drawTitle — Draws the game title and subtitle text. */
     private void drawTitle(Graphics2D g) {
-        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 48));
-        g.setColor(TITLE_COLOR);
-        drawCenteredString(g, "ENGKANTO CLASH", 70);
+        int maxLogoWidth = 340;
+        int logoWidth = Math.min(maxLogoWidth, titleLogo.getWidth());
+        int logoHeight = (int) Math.round(titleLogo.getHeight() * (logoWidth / (double) titleLogo.getWidth()));
+        int logoX = (GameConfig.SCREEN_WIDTH - logoWidth) / 2;
+        int logoY = 18;
+        g.drawImage(titleLogo, logoX, logoY, logoWidth, logoHeight, null);
 
         g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 18));
         g.setColor(new Color(200, 200, 200));
-        drawCenteredString(g, "Select your character", 105);
+        drawCenteredString(g, "Select your character", logoY + logoHeight + 24);
     }
 
     /* drawCharacterCards — Draws the four character selection cards with portraits and highlight. */
