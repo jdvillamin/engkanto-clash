@@ -32,6 +32,9 @@ public final class AudioManager {
     private long musicRequestId;
     private boolean musicEnabled = true;
     private boolean soundEnabled = true;
+    
+    public static float musicVolumeMultiplier = 1.0f;
+    public static float sfxVolumeMultiplier = 1.0f;
 
     private AudioManager() {
     }
@@ -39,6 +42,20 @@ public final class AudioManager {
     public static AudioManager getInstance() {
         return INSTANCE;
     }
+
+    public synchronized void setMusicVolume(float volume) {
+        musicVolumeMultiplier = clamp(volume, 0f, 1f);
+
+        if (currentMusic != null && activeMusicCue != null) {
+            setVolume(currentMusic,
+                    activeMusicCue.getVolume() * musicVolumeMultiplier);
+        }
+    }
+
+    public synchronized void setSfxVolume(float volume) {
+        sfxVolumeMultiplier = clamp(volume, 0f, 1f);
+    }
+
 
     public synchronized void playMusic(AudioCue cue) {
         if (cue == null || !cue.isMusic() || !musicEnabled) {
@@ -151,7 +168,7 @@ public final class AudioManager {
             }
 
             clip.open(input);
-            setVolume(clip, cue.getVolume());
+            setVolume(clip, cue.getVolume() * musicVolumeMultiplier);
             clip.loop(Clip.LOOP_CONTINUOUSLY);
             clip.start();
         } catch (Exception exception) {
@@ -169,7 +186,7 @@ public final class AudioManager {
         try (AudioInputStream input = openPlayableAudioStream(resourcePath)) {
             Clip clip = AudioSystem.getClip();
             clip.open(input);
-            setVolume(clip, volume);
+            setVolume(clip, volume * sfxVolumeMultiplier);
             clip.addLineListener(event -> closeClipWhenStopped(clip, event));
             clip.start();
         } catch (Exception exception) {

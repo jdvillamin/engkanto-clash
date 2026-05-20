@@ -19,6 +19,7 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
@@ -97,6 +98,12 @@ public final class LobbyPanel extends JPanel implements Runnable {
     private Thread lobbyThread;
     private volatile boolean running;
 
+    private final Rectangle musicIconBounds = new Rectangle(20, 20, 42, 32);
+    private final Rectangle sfxIconBounds = new Rectangle(70, 20, 42, 32);
+
+    private int musicVolume = 100;
+    private int sfxVolume = 100;
+
     /*
      * LobbyPanel — Sets up the panel, loads portraits, and registers mouse/key listeners.
      */
@@ -172,6 +179,17 @@ public final class LobbyPanel extends JPanel implements Runnable {
         }
     }
 
+    private int nextVolumeStep(int v) {
+        int[] steps = {0, 25, 50, 75, 100};
+
+        for (int i = 0; i < steps.length; i++) {
+            if (steps[i] == v) {
+                return steps[(i + 1) % steps.length];
+            }
+        }
+        return 75;
+    }
+
     /* paintComponent — Draws background, cards, player slots, ready button, chat, and countdown. */
     @Override
     protected void paintComponent(Graphics graphics) {
@@ -188,6 +206,7 @@ public final class LobbyPanel extends JPanel implements Runnable {
             drawReadyButton(g);
             drawChat(g);
             drawCountdown(g);
+            drawAudioIcons(g);
 
             if (!networkClient.isConnected()) {
                 drawDisconnected(g);
@@ -221,6 +240,18 @@ public final class LobbyPanel extends JPanel implements Runnable {
             localReady = !localReady;
             networkClient.sendReady();
             audioManager.playSound(AudioCue.MENU_CONFIRM);
+        }
+
+        if (musicIconBounds.contains(mx, my)) {
+            musicVolume = nextVolumeStep(musicVolume);
+            audioManager.setMusicVolume(musicVolume / 100f);
+            return;
+        }
+
+        if (sfxIconBounds.contains(mx, my)) {
+            sfxVolume = nextVolumeStep(sfxVolume);
+            audioManager.setSfxVolume(sfxVolume / 100f);
+            return;
         }
     }
 
@@ -479,5 +510,35 @@ public final class LobbyPanel extends JPanel implements Runnable {
             portraits[i] = sheet.getFrame(0, 0);
         }
         return portraits;
+    }
+
+    private void drawAudioIcons(Graphics2D g) {
+        drawIcon(g, musicIconBounds, "M", musicVolume);
+        drawIcon(g, sfxIconBounds, "S", sfxVolume);
+    }
+
+    private void drawIcon(Graphics2D g, Rectangle r, String label, int volume) {
+
+        // button background
+        g.setColor(new Color(0, 0, 0, 160));
+        g.fillRoundRect(r.x, r.y, r.width, r.height, 8, 8);
+
+        // label
+        g.setColor(Color.WHITE);
+        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+
+        FontMetrics fm = g.getFontMetrics();
+        int tx = r.x + (r.width - fm.stringWidth(label)) / 2;
+        int ty = r.y + (r.height + fm.getAscent()) / 2 - 2;
+        g.drawString(label, tx, ty);
+
+        // volume bar background
+        g.setColor(new Color(255, 255, 255, 80));
+        g.fillRect(r.x, r.y + r.height + 4, r.width, 4);
+
+        // volume bar fill
+        g.setColor(new Color(120, 220, 160));
+        int filled = (int) (r.width * (volume / 100.0));
+        g.fillRect(r.x, r.y + r.height + 4, filled, 4);
     }
 }
