@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file advances animation frames over time. It helps characters show the correct sprite frame for their current action.
+ */
 package com.engkanto.client.game.character;
 
 public final class SpriteAnimator {

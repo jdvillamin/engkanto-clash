@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file manages floating damage numbers. It adds new numbers, updates them, and removes them when they finish fading.
+ */
 package com.engkanto.client.game.combat;
 
 import java.awt.Graphics2D;

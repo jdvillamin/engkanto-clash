@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file defines messages sent from the server to clients. It supports welcome, lobby state, game state, chat, start, and disconnect messages.
+ */
 package com.engkanto.common.net;
 
 import com.engkanto.common.model.GameStateSnapshot;

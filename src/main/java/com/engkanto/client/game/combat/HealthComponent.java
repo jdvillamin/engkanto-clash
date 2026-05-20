@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file manages health for a game object. It handles damage, healing, death, revival, and poison effects.
+ */
 package com.engkanto.client.game.combat;
 
 import java.util.ArrayList;

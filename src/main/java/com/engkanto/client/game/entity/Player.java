@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file represents the local playable player. It handles movement, character switching, attacks, cooldowns, health, and drawing.
+ */
 package com.engkanto.client.game.entity;
 
 import java.awt.AlphaComposite;

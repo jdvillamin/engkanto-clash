@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file defines the Kapre playable character. It loads Kapre sprites and draws the log effect used by some attacks.
+ */
 package com.engkanto.client.game.character;
 
 import java.awt.Graphics2D;

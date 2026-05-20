@@ -1,4 +1,13 @@
 /*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file starts the client program. It reads command line options, tries to connect to a server, and opens the game window.
+ */
+/*
  * Key Objects / Methods Used
  *
  * SwingUtilities

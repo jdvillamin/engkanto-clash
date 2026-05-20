@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file defines the Engkanto playable character. It handles Engkanto projectiles, vine roots, and special visual effects.
+ */
 package com.engkanto.client.game.character;
 
 import java.awt.Graphics2D;

@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file draws players received from the server. It also shows remote projectiles, vines, health bars, and hit effects.
+ */
 package com.engkanto.client.game.entity;
 
 import java.awt.AlphaComposite;

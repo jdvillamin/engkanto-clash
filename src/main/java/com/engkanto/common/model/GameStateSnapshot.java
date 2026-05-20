@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file stores one snapshot of the official game state from the server. Clients use it to draw all players and match information.
+ */
 package com.engkanto.common.model;
 
 import java.util.ArrayList;

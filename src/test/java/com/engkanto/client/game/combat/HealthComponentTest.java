@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file tests the HealthComponent class. It checks damage, healing, death, and invalid health behavior.
+ */
 package com.engkanto.client.game.combat;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

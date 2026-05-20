@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file lists the music and sound effect cues used by the game. Each cue stores whether it is music, its volume, and its audio file path.
+ */
 package com.engkanto.client.audio;
 
 public enum AudioCue {

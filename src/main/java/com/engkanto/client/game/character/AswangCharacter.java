@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file defines the Aswang playable character. It provides the Aswang sprite sheet and custom glide behavior.
+ */
 package com.engkanto.client.game.character;
 
 import com.engkanto.client.game.combat.DamageComponent;

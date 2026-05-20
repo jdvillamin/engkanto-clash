@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file draws small debug text on the game screen. It is mainly used during development and testing.
+ */
 package com.engkanto.client.render;
 
 import com.engkanto.client.game.GameConfig;

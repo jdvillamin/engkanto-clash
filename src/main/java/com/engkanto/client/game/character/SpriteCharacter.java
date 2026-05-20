@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file is the base class for sprite-based characters. It loads a sprite sheet and returns frames for each player action.
+ */
 package com.engkanto.client.game.character;
 
 import com.engkanto.client.render.AssetLoader;

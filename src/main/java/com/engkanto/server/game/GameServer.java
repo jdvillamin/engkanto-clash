@@ -1,4 +1,13 @@
 /*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file runs the authoritative multiplayer game server. It accepts clients, manages the lobby and match phases, updates combat, and broadcasts state.
+ */
+/*
  * Key Objects / Libraries Used
  *
  * Gson
@@ -278,19 +287,26 @@ public final class GameServer {
      * - After the results timer ends, resets players/readiness and sends everyone back to lobby.
      */
     private void updateGameOver(double deltaSeconds) {
-        List<ClientConnection> connections;
-        ServerMessage message;
+        List<ClientConnection> connections = null;
+        ServerMessage message = null;
+        boolean broadcastResults;
 
         synchronized (lock) {
             resultsSecondsRemaining = Math.max(0.0, resultsSecondsRemaining - deltaSeconds);
-            connections = new ArrayList<>(clients.values());
 
             if (resultsSecondsRemaining <= 0.0) {
                 resetToLobby();
+                connections = new ArrayList<>(clients.values());
                 message = ServerMessage.lobbyState(createLobbySnapshot());
+                broadcastResults = false;
             } else {
-                message = ServerMessage.gameState(createSnapshot());
+                broadcastResults = true;
             }
+        }
+
+        if (broadcastResults) {
+            broadcastGameState();
+            return;
         }
 
         for (ClientConnection connection : connections) {

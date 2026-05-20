@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file slices sprite sheets into individual animation frames. It also helps remove white backgrounds from sprite images.
+ */
 package com.engkanto.client.render;
 
 import java.awt.image.BufferedImage;

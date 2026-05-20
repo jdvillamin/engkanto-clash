@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file represents the local training dummy. It can take damage, die, respawn, and show status effects for testing combat.
+ */
 package com.engkanto.client.game.entity;
 
 import java.awt.AlphaComposite;

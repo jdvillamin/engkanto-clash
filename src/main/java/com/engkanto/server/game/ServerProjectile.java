@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file represents a projectile on the server. It moves projectiles and tracks their owner, damage, and hit box.
+ */
 package com.engkanto.server.game;
 
 final class ServerProjectile {

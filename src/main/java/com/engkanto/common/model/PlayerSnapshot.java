@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file stores one player state in a server game snapshot. It includes position, action, health, cooldowns, kills, and effects.
+ */
 package com.engkanto.common.model;
 
 public final class PlayerSnapshot {
