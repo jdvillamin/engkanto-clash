@@ -80,6 +80,8 @@ import com.engkanto.common.model.GameStateSnapshot;
 import com.engkanto.common.model.PlayerSnapshot;
 
 public final class GamePanel extends JPanel implements Runnable {
+    private static final String BACKGROUND_MAP_PATH = "/assets/maps/grassland.png";
+
     private static final int CHAT_X = 16;
     private static final int CHAT_Y = 420;
     private static final int CHAT_WIDTH = 320;
@@ -105,6 +107,7 @@ public final class GamePanel extends JPanel implements Runnable {
     private final DebugRenderer debugRenderer;
     private final HealthUI healthUI;
     private final AbilityUI abilityUI;
+    private final BufferedImage backgroundImage;
     private final NetworkClient networkClient;
     private final RemotePlayerRenderer remotePlayerRenderer;
     private final BufferedImage vineOverlayImage;
@@ -149,6 +152,7 @@ public final class GamePanel extends JPanel implements Runnable {
         debugRenderer = new DebugRenderer();
         healthUI = new HealthUI(player);
         abilityUI = new AbilityUI(player);
+        backgroundImage = AssetLoader.loadImage(BACKGROUND_MAP_PATH);
         remotePlayerRenderer = new RemotePlayerRenderer();
         networkAudioStates = new HashMap<>();
 
@@ -1051,16 +1055,7 @@ public final class GamePanel extends JPanel implements Runnable {
      * - Draws the background color and tile grid lines.
      */
     private void drawWorld(Graphics2D graphics) {
-        graphics.setColor(new Color(42, 92, 76));
-        graphics.fillRect(0, 0, getWidth(), getHeight());
-
-        graphics.setColor(new Color(34, 74, 62));
-        for (int x = 0; x < getWidth(); x += GameConfig.TILE_SIZE) {
-            graphics.drawLine(x, 0, x, getHeight());
-        }
-        for (int y = 0; y < getHeight(); y += GameConfig.TILE_SIZE) {
-            graphics.drawLine(0, y, getWidth(), y);
-        }
+        graphics.drawImage(backgroundImage, 0, 0, getWidth(), getHeight(), null);
     }
 
     private void drawPlatforms(Graphics2D graphics) {
