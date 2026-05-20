@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file represents a platform in the arena. It stores platform bounds and draws the grass and dirt tiles.
+ */
 package com.engkanto.client.game.world;
 
 import com.engkanto.client.render.AssetLoader;

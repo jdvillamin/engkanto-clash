@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file lists the possible player actions such as idle, walk, jump, attacks, and special. It also stores animation row and timing information.
+ */
 package com.engkanto.client.game.character;
 
 public enum PlayerAction {

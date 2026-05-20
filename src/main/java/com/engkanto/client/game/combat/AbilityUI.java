@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file draws the ability buttons on the game screen. It shows which keys activate attacks and displays cooldown timers.
+ */
 package com.engkanto.client.game.combat;
 
 import java.awt.Color;

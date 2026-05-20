@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file represents a damage value that can be applied in combat. It keeps the amount and damage type together.
+ */
 package com.engkanto.client.game.combat;
 
 import java.util.ArrayList;

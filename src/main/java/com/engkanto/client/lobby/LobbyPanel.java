@@ -1,4 +1,13 @@
 /*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file draws and updates the multiplayer lobby. It lets players select characters, ready up, chat, and wait for the match countdown.
+ */
+/*
  * Key Objects / Libraries Used
  *
  * JPanel — Base Swing component; LobbyPanel overrides paintComponent() to draw the lobby UI.

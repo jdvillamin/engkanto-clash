@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file provides a small pooled hit sound effect helper. It lets repeated hits play quickly without waiting for one clip to finish.
+ */
 package com.engkanto.client.audio;
 
 import java.util.Random;

@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file draws the player health display. It shows the current health bar and health text during gameplay.
+ */
 package com.engkanto.client.game.combat;
 
 import com.engkanto.client.game.entity.Player;

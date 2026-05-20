@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file starts the multiplayer server program. It reads the port argument and runs the GameServer.
+ */
 package com.engkanto.server;
 
 import java.io.IOException;

@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file tracks keyboard input for the player. It converts key presses into movement, attacks, debug actions, and network input snapshots.
+ */
 package com.engkanto.client.input;
 
 import java.awt.event.KeyAdapter;

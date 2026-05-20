@@ -1,4 +1,13 @@
 /*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file is the main gameplay panel. It updates local or network gameplay and draws the world, players, HUD, chat, leaderboard, and results screen.
+ */
+/*
  * Key Objects / Libraries Used
  *
  * JPanel

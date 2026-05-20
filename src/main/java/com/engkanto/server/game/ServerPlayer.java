@@ -1,4 +1,13 @@
 /*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file represents a player on the server. It handles movement, attacks, health, cooldowns, kills, respawns, and status effects.
+ */
+/*
  * Key Objects / Libraries Used
  *
  * PlayerInputSnapshot

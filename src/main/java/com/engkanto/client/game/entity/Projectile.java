@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file represents a local projectile. It moves across the screen, draws itself, and applies damage when it hits something.
+ */
 package com.engkanto.client.game.entity;
 
 import java.awt.Graphics2D;

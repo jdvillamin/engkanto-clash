@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file defines the common interface for playable characters. It tells the rest of the game how to get frames, actions, and effects for any character.
+ */
 package com.engkanto.client.game.character;
 
 import java.awt.Graphics2D;

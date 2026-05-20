@@ -1,4 +1,13 @@
 /*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file runs the authoritative multiplayer game server. It accepts clients, manages the lobby and match phases, updates combat, and broadcasts state.
+ */
+/*
  * Key Objects / Libraries Used
  *
  * Gson

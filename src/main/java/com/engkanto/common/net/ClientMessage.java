@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file defines messages sent from the client to the server. It supports player input, character selection, ready status, and chat.
+ */
 package com.engkanto.common.net;
 
 import com.engkanto.common.model.PlayerInputSnapshot;

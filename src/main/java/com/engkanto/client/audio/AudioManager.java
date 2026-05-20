@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file controls music and sound effects for the client. It plays WAV clips, loops background music, and prevents duplicate music from stacking.
+ */
 package com.engkanto.client.audio;
 
 import java.io.IOException;

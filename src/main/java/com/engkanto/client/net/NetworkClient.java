@@ -1,4 +1,13 @@
 /*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file handles the client side of multiplayer networking. It connects to the server, sends inputs and chat, and stores the latest server state.
+ */
+/*
  * Key Objects / Libraries Used
  *
  * Gson

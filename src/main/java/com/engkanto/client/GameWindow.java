@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file manages the main Swing window. It switches between the lobby screen and the game screen and starts the correct background music.
+ */
 package com.engkanto.client;
 
 import com.engkanto.client.audio.AudioCue;

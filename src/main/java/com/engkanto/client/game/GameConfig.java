@@ -1,3 +1,12 @@
+/*
+ * Authors:
+ * Alexander John Castro III
+ * Sean Caleb Romero
+ * Jan Neal Isaac Villamin
+ * Lab section: B-5L
+ * Program description:
+ * This file stores shared game screen and timing constants. Other client game classes use it so they agree on window size, tile size, and update rate.
+ */
 package com.engkanto.client.game;
 
 public final class GameConfig {
