@@ -79,8 +79,8 @@ Replace `192.168.1.20` with the server PC's real LAN IP.
 3. When all players are ready, a `10` second countdown starts.
 4. After the countdown, the match starts.
 
-New players cannot join after the match starts. Restart the server for a new
-lobby.
+New players cannot join during an active match. After the results screen, the
+server returns everyone to the lobby for another round.
 
 ## Troubleshooting
 

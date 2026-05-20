@@ -59,6 +59,7 @@ import java.util.List;
 import java.util.Map;
 
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 
 import com.engkanto.client.audio.AudioCue;
 import com.engkanto.client.audio.AudioManager;
@@ -109,19 +110,21 @@ public final class GamePanel extends JPanel implements Runnable {
     private final AbilityUI abilityUI;
     private final BufferedImage backgroundImage;
     private final NetworkClient networkClient;
+    private final Runnable onLobbyReturn;
     private final RemotePlayerRenderer remotePlayerRenderer;
     private final BufferedImage vineOverlayImage;
     private final StringBuilder chatInput = new StringBuilder();
     private final Map<Integer, NetworkAudioState> networkAudioStates;
 
     private Thread gameThread;
-    private boolean running;
+    private volatile boolean running;
     private PlayerAction activeDirectAttack;
     private boolean directAttackHitApplied;
     private long inputSequence;
     private boolean chatFocused;
     private double chatVisibleTimer;
     private int lastSeenMessageCount;
+    private boolean lobbyReturnRequested;
 
     public GamePanel() {
         this(null, AudioManager.getInstance());
@@ -139,7 +142,12 @@ public final class GamePanel extends JPanel implements Runnable {
     }
 
     public GamePanel(NetworkClient networkClient, AudioManager audioManager) {
+        this(networkClient, audioManager, null);
+    }
+
+    public GamePanel(NetworkClient networkClient, AudioManager audioManager, Runnable onLobbyReturn) {
         this.networkClient = networkClient;
+        this.onLobbyReturn = onLobbyReturn;
         this.audioManager = audioManager;
         keyboardInput = new KeyboardInput();
         platforms = createPlatforms();
@@ -185,6 +193,14 @@ public final class GamePanel extends JPanel implements Runnable {
         gameThread = new Thread(this, "engkanto-game-loop");
         gameThread.start();
         requestFocusInWindow();
+    }
+
+    public synchronized void stop() {
+        running = false;
+        if (gameThread != null) {
+            gameThread.interrupt();
+            gameThread = null;
+        }
     }
 
     /*
@@ -240,6 +256,10 @@ public final class GamePanel extends JPanel implements Runnable {
      */
     private void update(double deltaSeconds) {
         if (isNetworkMode()) {
+            if (!networkClient.isGameStarted()) {
+                requestLobbyReturn();
+                return;
+            }
             GameStateSnapshot state = networkClient.getLatestState();
             if (state == null || !state.gameOver) {
                 networkClient.sendInput(keyboardInput.consumeNetworkSnapshot(++inputSequence));
@@ -269,6 +289,14 @@ public final class GamePanel extends JPanel implements Runnable {
         resolvePlayerAttacks();
         resolveProjectileHits();
         resolveVineRoots();
+    }
+
+    private void requestLobbyReturn() {
+        if (onLobbyReturn == null || lobbyReturnRequested) {
+            return;
+        }
+        lobbyReturnRequested = true;
+        SwingUtilities.invokeLater(onLobbyReturn);
     }
 
     /*

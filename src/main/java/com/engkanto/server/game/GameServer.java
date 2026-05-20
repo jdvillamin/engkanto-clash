@@ -77,6 +77,7 @@ public final class GameServer {
     private static final double TARGET_UPDATES_PER_SECOND = 60.0;
     private static final double COUNTDOWN_SECONDS = 10.0;
     private static final double GAME_DURATION_SECONDS = 180.0;
+    private static final double RESULTS_SECONDS = 8.0;
     private static final int SCREEN_HEIGHT = 704;
 
     private static final double[][] SPAWN_CANDIDATES = {
@@ -103,6 +104,7 @@ public final class GameServer {
     private boolean countdownActive;
     private double countdownRemaining;
     private double gameSecondsRemaining = GAME_DURATION_SECONDS;
+    private double resultsSecondsRemaining;
 
     public GameServer(int port) {
         this.port = port;
@@ -228,7 +230,7 @@ public final class GameServer {
      *
      * - Called once per server tick to advance the game state.
      * - In the lobby phase, delegates to updateLobby for countdown logic.
-     * - In the game-over phase, just broadcasts the final state.
+     * - In the game-over phase, broadcasts results briefly before returning to lobby.
      * - During gameplay, updates all players, resolves combat/vines/poisons/projectiles,
      *   handles respawns, checks the game timer, and broadcasts the new state to all clients.
      */
@@ -238,7 +240,7 @@ public final class GameServer {
             return;
         }
         if (phase == Phase.GAME_OVER) {
-            broadcastGameState();
+            updateGameOver(deltaSeconds);
             return;
         }
 
@@ -256,6 +258,7 @@ public final class GameServer {
             respawnReadyPlayers();
             if (gameSecondsRemaining <= 0.0) {
                 phase = Phase.GAME_OVER;
+                resultsSecondsRemaining = RESULTS_SECONDS;
                 System.out.println("Game over!");
             }
             tick++;
@@ -263,6 +266,33 @@ public final class GameServer {
             connections = new ArrayList<>(clients.values());
         }
         ServerMessage message = ServerMessage.gameState(snapshot);
+        for (ClientConnection connection : connections) {
+            connection.send(message);
+        }
+    }
+
+    /*
+     * updateGameOver(double deltaSeconds)
+     *
+     * - Keeps broadcasting the final results for a short results phase.
+     * - After the results timer ends, resets players/readiness and sends everyone back to lobby.
+     */
+    private void updateGameOver(double deltaSeconds) {
+        List<ClientConnection> connections;
+        ServerMessage message;
+
+        synchronized (lock) {
+            resultsSecondsRemaining = Math.max(0.0, resultsSecondsRemaining - deltaSeconds);
+            connections = new ArrayList<>(clients.values());
+
+            if (resultsSecondsRemaining <= 0.0) {
+                resetToLobby();
+                message = ServerMessage.lobbyState(createLobbySnapshot());
+            } else {
+                message = ServerMessage.gameState(createSnapshot());
+            }
+        }
+
         for (ClientConnection connection : connections) {
             connection.send(message);
         }
@@ -337,6 +367,33 @@ public final class GameServer {
         for (ClientConnection connection : connections) {
             connection.send(message);
         }
+    }
+
+    /*
+     * resetToLobby()
+     *
+     * - Clears match state and marks all connected clients unready.
+     * - Recreates server players so health, kills, cooldowns, projectiles, and effects reset.
+     * - Keeps each client's current character selection so they can ready up or reselect.
+     */
+    private void resetToLobby() {
+        phase = Phase.LOBBY;
+        countdownActive = false;
+        countdownRemaining = -1;
+        gameSecondsRemaining = GAME_DURATION_SECONDS;
+        resultsSecondsRemaining = 0.0;
+        tick = 0;
+        projectiles.clear();
+        players.clear();
+
+        for (ClientConnection connection : clients.values()) {
+            connection.ready = false;
+            ServerPlayer player = createPlayer(connection.playerId);
+            player.setCharacterIndex(connection.characterIndex);
+            players.put(connection.playerId, player);
+        }
+
+        System.out.println("Returned to lobby.");
     }
 
     /*

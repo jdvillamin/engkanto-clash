@@ -7,6 +7,7 @@ import com.engkanto.client.lobby.LobbyPanel;
 import com.engkanto.client.net.NetworkClient;
 
 import javax.swing.JFrame;
+import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -62,16 +63,44 @@ public final class GameWindow {
     }
 
     private void transitionToGame() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(this::transitionToGame);
+            return;
+        }
+        if (gamePanel != null && lobbyPanel == null) {
+            return;
+        }
         if (lobbyPanel != null) {
             lobbyPanel.stop();
             frame.remove(lobbyPanel);
             lobbyPanel = null;
         }
         audioManager.playMusic(AudioCue.IN_GAME_MUSIC);
-        gamePanel = new GamePanel(networkClient, audioManager);
+        gamePanel = new GamePanel(networkClient, audioManager, this::transitionToLobby);
         frame.add(gamePanel, BorderLayout.CENTER);
         frame.revalidate();
         frame.repaint();
         gamePanel.start();
+    }
+
+    private void transitionToLobby() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(this::transitionToLobby);
+            return;
+        }
+        if (lobbyPanel != null && gamePanel == null) {
+            return;
+        }
+        if (gamePanel != null) {
+            gamePanel.stop();
+            frame.remove(gamePanel);
+            gamePanel = null;
+        }
+        audioManager.playMusic(AudioCue.MENU_MUSIC);
+        lobbyPanel = new LobbyPanel(networkClient, this::transitionToGame, audioManager);
+        frame.add(lobbyPanel, BorderLayout.CENTER);
+        frame.revalidate();
+        frame.repaint();
+        lobbyPanel.start();
     }
 }

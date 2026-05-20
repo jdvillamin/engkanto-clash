@@ -40,6 +40,7 @@ ServerMain
       -> lobby phase
       -> game phase
       -> game-over phase
+      -> lobby phase
 ```
 
 The server handles:
@@ -48,6 +49,7 @@ The server handles:
 - character selection and ready state
 - `10` second countdown when all players are ready
 - `180` second match timer
+- automatic return to lobby after the results phase
 - authoritative movement, jumping, platforms, and Aswang glide
 - skill cooldowns
 - player HP, deaths, respawns, and respawn invulnerability
