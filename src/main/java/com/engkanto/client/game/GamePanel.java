@@ -8,10 +8,14 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.swing.JPanel;
 
+import com.engkanto.client.audio.AudioCue;
+import com.engkanto.client.audio.AudioManager;
 import com.engkanto.client.game.character.PlayerAction;
 import com.engkanto.client.game.combat.AbilityUI;
 import com.engkanto.client.game.combat.HealthUI;
@@ -29,6 +33,15 @@ import com.engkanto.client.render.DebugRenderer;
 import java.util.Comparator;
 
 public final class GamePanel extends JPanel implements Runnable {
+    private static final String NETWORK_ACTION_IDLE = "IDLE";
+    private static final String NETWORK_ACTION_WALK = "WALK";
+    private static final String NETWORK_ACTION_JUMP = "JUMP";
+    private static final String NETWORK_ACTION_MOVE_1 = "MOVE_1";
+    private static final String NETWORK_ACTION_MOVE_2 = "MOVE_2";
+    private static final String NETWORK_ACTION_MOVE_3 = "MOVE_3";
+    private static final String NETWORK_ACTION_SPECIAL = "SPECIAL";
+
+    private final AudioManager audioManager;
     private final KeyboardInput keyboardInput;
     private final List<Platform> platforms;
     private final Player player;
@@ -38,6 +51,7 @@ public final class GamePanel extends JPanel implements Runnable {
     private final AbilityUI abilityUI;
     private final NetworkClient networkClient;
     private final RemotePlayerRenderer remotePlayerRenderer;
+    private final Map<Integer, NetworkAudioState> networkAudioStates;
 
     private Thread gameThread;
     private boolean running;
@@ -46,11 +60,16 @@ public final class GamePanel extends JPanel implements Runnable {
     private long inputSequence;
 
     public GamePanel() {
-        this(null);
+        this(null, AudioManager.getInstance());
     }
 
     public GamePanel(NetworkClient networkClient) {
+        this(networkClient, AudioManager.getInstance());
+    }
+
+    public GamePanel(NetworkClient networkClient, AudioManager audioManager) {
         this.networkClient = networkClient;
+        this.audioManager = audioManager;
         keyboardInput = new KeyboardInput();
         platforms = createPlatforms();
         player = new Player(
@@ -63,6 +82,7 @@ public final class GamePanel extends JPanel implements Runnable {
         healthUI = new HealthUI(player);
         abilityUI = new AbilityUI(player);
         remotePlayerRenderer = new RemotePlayerRenderer();
+        networkAudioStates = new HashMap<>();
 
         setPreferredSize(new Dimension(GameConfig.SCREEN_WIDTH, GameConfig.SCREEN_HEIGHT));
         setBackground(new Color(28, 36, 32));
@@ -108,21 +128,152 @@ public final class GamePanel extends JPanel implements Runnable {
 
     private void update(double deltaSeconds) {
         if (isNetworkMode()) {
+            GameStateSnapshot state = networkClient.getLatestState();
             networkClient.sendInput(keyboardInput.consumeNetworkSnapshot(++inputSequence));
-            remotePlayerRenderer.update(deltaSeconds, networkClient.getLatestState());
+            emitNetworkAudio(state);
+            remotePlayerRenderer.update(deltaSeconds, state);
             return;
         }
 
+        PlayerAction previousAction = player.getCurrentAction();
+        String previousCharacterName = player.getCharacterName();
+        boolean wasOnGround = player.isOnGroundState();
+        boolean wasDead = player.isDead();
+
         if (keyboardInput.consumeDamageRequested()) {
             player.takeDamage(25.0);
+            audioManager.playSound(AudioCue.PLAYER_HURT);
         }
         if (keyboardInput.consumeHealRequested()) {
             player.heal(25.0);
+            audioManager.playSound(AudioCue.PLAYER_HEAL);
         }
         player.update(keyboardInput, platforms, deltaSeconds);
+        emitPlayerAudio(previousAction, previousCharacterName, wasOnGround, wasDead);
         dummy.update(deltaSeconds);
         resolvePlayerAttacks();
         resolveProjectileHits();
+    }
+
+    private void emitNetworkAudio(GameStateSnapshot state) {
+        if (state == null) {
+            return;
+        }
+
+        Map<Integer, NetworkAudioState> nextStates = new HashMap<>();
+        for (PlayerSnapshot snapshot : state.players) {
+            NetworkAudioState previous = networkAudioStates.get(snapshot.id);
+            if (previous != null) {
+                emitNetworkPlayerAudio(previous, snapshot);
+            }
+            nextStates.put(snapshot.id, new NetworkAudioState(snapshot));
+        }
+        networkAudioStates.clear();
+        networkAudioStates.putAll(nextStates);
+    }
+
+    private void emitNetworkPlayerAudio(NetworkAudioState previous, PlayerSnapshot current) {
+        boolean localPlayer = current.id == networkClient.getLocalPlayerId();
+        String currentAction = normalizeAction(current.action);
+        boolean actionChanged = !currentAction.equals(previous.action);
+
+        if (localPlayer && NETWORK_ACTION_WALK.equals(previous.action)
+                && !NETWORK_ACTION_WALK.equals(currentAction)) {
+            audioManager.stopLoopingSound(AudioCue.MOVE_START);
+        } else if (!localPlayer && actionChanged && NETWORK_ACTION_WALK.equals(currentAction)) {
+            audioManager.playSound(AudioCue.MOVE_START);
+        }
+        if (localPlayer && actionChanged && NETWORK_ACTION_WALK.equals(currentAction)) {
+            audioManager.playLoopingSound(AudioCue.MOVE_START);
+        }
+        if (actionChanged && NETWORK_ACTION_JUMP.equals(currentAction)) {
+            audioManager.playSound(AudioCue.JUMP);
+        }
+        if (NETWORK_ACTION_JUMP.equals(previous.action) && !NETWORK_ACTION_JUMP.equals(currentAction)) {
+            audioManager.playSound(AudioCue.LAND);
+        }
+        if (actionChanged) {
+            playNetworkActionSound(currentAction);
+        }
+        if (current.characterIndex != previous.characterIndex) {
+            audioManager.playSound(AudioCue.CHARACTER_SWITCH);
+        }
+        if (current.health < previous.health) {
+            audioManager.playSound(AudioCue.PLAYER_HURT);
+        }
+        if (current.health > previous.health) {
+            audioManager.playSound(AudioCue.PLAYER_HEAL);
+        }
+        if (!previous.dead && current.dead) {
+            audioManager.playSound(AudioCue.PLAYER_DEATH);
+        }
+    }
+
+    private void playNetworkActionSound(String action) {
+        switch (action) {
+            case NETWORK_ACTION_MOVE_1 -> audioManager.playSound(AudioCue.ATTACK_1);
+            case NETWORK_ACTION_MOVE_2 -> audioManager.playSound(AudioCue.ATTACK_2);
+            case NETWORK_ACTION_MOVE_3 -> audioManager.playSound(AudioCue.ATTACK_3);
+            case NETWORK_ACTION_SPECIAL -> audioManager.playSound(AudioCue.SPECIAL);
+            default -> {
+            }
+        }
+    }
+
+    private String normalizeAction(String action) {
+        return action == null ? NETWORK_ACTION_IDLE : action;
+    }
+
+    private void emitPlayerAudio(PlayerAction previousAction, String previousCharacterName,
+            boolean wasOnGround, boolean wasDead) {
+        PlayerAction currentAction = player.getCurrentAction();
+
+        if (previousAction == PlayerAction.WALK && currentAction != PlayerAction.WALK) {
+            audioManager.stopLoopingSound(AudioCue.MOVE_START);
+        }
+        if (currentAction == PlayerAction.WALK && previousAction != PlayerAction.WALK) {
+            audioManager.playLoopingSound(AudioCue.MOVE_START);
+        }
+        if (wasOnGround && !player.isOnGroundState()) {
+            audioManager.playSound(AudioCue.JUMP);
+        }
+        if (!wasOnGround && player.isOnGroundState()) {
+            audioManager.playSound(AudioCue.LAND);
+        }
+        if (currentAction != previousAction) {
+            playActionSound(currentAction);
+        }
+        if (!previousCharacterName.equals(player.getCharacterName())) {
+            audioManager.playSound(AudioCue.CHARACTER_SWITCH);
+        }
+        if (!wasDead && player.isDead()) {
+            audioManager.playSound(AudioCue.PLAYER_DEATH);
+        }
+    }
+
+    private void playActionSound(PlayerAction action) {
+        switch (action) {
+            case MOVE_1 -> audioManager.playSound(AudioCue.ATTACK_1);
+            case MOVE_2 -> audioManager.playSound(AudioCue.ATTACK_2);
+            case MOVE_3 -> audioManager.playSound(AudioCue.ATTACK_3);
+            case SPECIAL -> audioManager.playSound(AudioCue.SPECIAL);
+            default -> {
+            }
+        }
+    }
+
+    private static final class NetworkAudioState {
+        private final String action;
+        private final int characterIndex;
+        private final double health;
+        private final boolean dead;
+
+        private NetworkAudioState(PlayerSnapshot snapshot) {
+            this.action = snapshot.action == null ? NETWORK_ACTION_IDLE : snapshot.action;
+            this.characterIndex = snapshot.characterIndex;
+            this.health = snapshot.health;
+            this.dead = snapshot.dead;
+        }
     }
 
     private void resolvePlayerAttacks() {

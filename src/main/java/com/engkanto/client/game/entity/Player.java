@@ -239,6 +239,10 @@ public final class Player {
         return facingLeft;
     }
 
+    public boolean isOnGroundState() {
+        return isOnGround();
+    }
+
     public PlayerAction getCurrentAction() {
         return animator.getAction();
     }
